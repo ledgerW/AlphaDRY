@@ -11,8 +11,8 @@ load_dotenv()
 
 from langchain_openai import ChatOpenAI
 
-
-retriever = TavilySearchAPIRetriever(name='web', k=3, include_raw_content=True)
+short_retriever = TavilySearchAPIRetriever(name='short_web', k=3)
+retriever = TavilySearchAPIRetriever(name='long_web', k=3, include_raw_content=True)
 
 
 

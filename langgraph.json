@@ -1,10 +1,10 @@
 {
   "dockerfile_lines": [
     "# Copy the project into the container",
-    "COPY . /deps/foxcheck",
+    "COPY . /deps/dryalpha",
     "",
     "# Set the working directory",
-    "WORKDIR /deps/foxcheck",
+    "WORKDIR /deps/dryalpha",
     "",
     "# Upgrade pip and setuptools",
     "RUN pip install --upgrade pip setuptools",
@@ -13,7 +13,7 @@
     "RUN PYTHONDONTWRITEBYTECODE=1 pip install -c /api/constraints.txt -e ."
   ],
   "graphs": {
-    "statement_checker": "./agents/statement_checker.py:agent_graph"
+    "alpha_scout": "agents/multi_agent_alpha_scout.py:agent_graph"
   },
   "env": ".env",
   "python_version": "3.11",

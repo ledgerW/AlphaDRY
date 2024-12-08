@@ -20,7 +20,7 @@ load_dotenv()
 
 from chains.seek_alpha_chain import base_seek_alpha, multi_hop_seek_alpha
 from chains.alpha_chain import Alpha
-#from agents.alpha_dry import agent_graph
+from agents.multi_agent_alpha_scout import multi_agent_alpha_scout, AlphaReport
 
 
 header_scheme = APIKeyHeader(name="x-key")
@@ -71,6 +71,19 @@ async def get_base_seek_alpha(token: Token):
 async def get_multi_hop_seek_alpha(token: Token):
     #try:
     alpha = await multi_hop_seek_alpha.ainvoke({'token': token})
+    return alpha
+    #except Exception as e:
+    #    raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/multi_agent_alpha_scout",
+    dependencies=[Depends(api_key_auth)],
+    response_model=AlphaReport
+)
+async def get_multi_agent_alpha_scout(messages: List[str]):
+    #try:
+    alpha = await multi_agent_alpha_scout.ainvoke({'messages': messages})
     return alpha
     #except Exception as e:
     #    raise HTTPException(status_code=500, detail=str(e))
