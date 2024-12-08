@@ -9,6 +9,23 @@ import sys
 # Load environment variables
 load_dotenv()
 
+
+# List of usernames to fetch casts from
+USERNAMES = [
+    'ace',
+    'halfmaxxing',
+    'deployer',
+    'mleejr',
+    'df',
+    'wake.eth',
+    'sartocrates',
+    'oi',
+    'carlos',
+    'birtcon',
+    'matthew'
+]
+
+
 def setup_environment(env: str):
     """Set up the environment (dev/prod)"""
     if env.lower() == "prod":
@@ -39,29 +56,14 @@ def load_warpcasts(env: str, num_users: int, casts_per_user: int):
         print(f"Error connecting to Warpcast API: {e}")
         sys.exit(1)
     
-    # List of usernames to fetch casts from
-    usernames = [
-        'ace',
-        'halfmaxxing',
-        'deployer',
-        'mleejr',
-        'df',
-        'wake.eth',
-        'sartocrates',
-        'oi',
-        'carlos',
-        'birtcon',
-        'matthew'
-    ]
-    
     # Limit number of users based on input
-    usernames = usernames[:num_users]
+    selected_usernames = USERNAMES[:num_users]
     
     total_casts_loaded = 0
     
-    print(f"\nLoading {casts_per_user} casts for each of {len(usernames)} users in {env} environment...")
+    print(f"\nLoading {casts_per_user} casts for each of {len(selected_usernames)} users in {env} environment...")
     
-    for username in usernames:
+    for username in selected_usernames:
         try:
             print(f"\nProcessing user: {username}")
             
@@ -82,7 +84,7 @@ def load_warpcasts(env: str, num_users: int, casts_per_user: int):
             for cast in casts_response.casts:
                 try:
                     warpcast = WarpcastSchema.from_cast(cast.dict())
-                    result = create_warpcast(warpcast)
+                    result = create_warpcast(warpcast, username)  # Pass the username here
                     if result:
                         user_casts_loaded += 1
                         total_casts_loaded += 1

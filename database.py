@@ -62,9 +62,10 @@ def create_warpcast_model(tablename: str):
         replies: int
         reactions: int
         recasts: int
+        pulled_from_user: str = Field(index=True)
 
         @classmethod
-        def from_warpcast(cls, warpcast: Warpcast) -> "WarpcastDB":
+        def from_warpcast(cls, warpcast: Warpcast, pulled_from_user: str) -> "WarpcastDB":
             return cls(
                 raw_cast=warpcast.raw_cast,
                 hash=warpcast.hash,
@@ -74,7 +75,8 @@ def create_warpcast_model(tablename: str):
                 timestamp=warpcast.timestamp,
                 replies=warpcast.replies,
                 reactions=warpcast.reactions,
-                recasts=warpcast.recasts
+                recasts=warpcast.recasts,
+                pulled_from_user=pulled_from_user
             )
 
         def to_warpcast(self) -> Warpcast:
@@ -107,13 +109,17 @@ def create_db_and_tables():
     """Create all database tables. Safe to call on startup."""
     engine = get_engine()
     Model = get_model()
+    
+    # Drop all tables first
+    SQLModel.metadata.drop_all(engine)
+    # Create tables
     SQLModel.metadata.create_all(engine)
 
 def get_session():
     """Get a new database session."""
     return Session(get_engine())
 
-def create_warpcast(warpcast: Warpcast) -> Optional[Any]:
+def create_warpcast(warpcast: Warpcast, pulled_from_user: str) -> Optional[Any]:
     """
     Create a new warpcast entry if it doesn't exist.
     Returns None if a warpcast with the same hash already exists.
@@ -127,7 +133,7 @@ def create_warpcast(warpcast: Warpcast) -> Optional[Any]:
             if existing:
                 return None
                 
-            db_warpcast = Model.from_warpcast(warpcast)
+            db_warpcast = Model.from_warpcast(warpcast, pulled_from_user)
             session.add(db_warpcast)
             session.commit()
             session.refresh(db_warpcast)
