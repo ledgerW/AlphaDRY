@@ -1,0 +1,22 @@
+[project]
+name = "AlphaDRY"
+version = "0.1.0"
+description = ""
+authors = ["Ledger <ledger@drypowder.fun>"]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.5",
+    "langchain>=0.3.8",
+    "langchain-community>=0.3.8",
+    "langchain-openai>=0.2.9",
+    "langsmith>=0.1.145",
+    "uvicorn>=0.32.1",
+    "langchain-core>=0.3.21",
+    "pydantic>=2.10.1",
+    "python-dotenv>=1.0.1",
+    "tavily-python>=0.5.0",
+    "openai>=1.55.0",
+    "langgraph>=0.2.56",
+    "langgraph-cli[inmem]>=0.1.61",
+    "farcaster>=0.7.11",
+]
