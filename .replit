@@ -13,7 +13,19 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
+args = "Initialize Database"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
 args = "FastAPI Server"
+
+[[workflows.workflow]]
+name = "Initialize Database"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python -c 'from database import create_db_and_tables; create_db_and_tables()'"
 
 [[workflows.workflow]]
 name = "FastAPI Server"
@@ -28,7 +40,7 @@ args = "uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 waitForPort = 8000
 
 [deployment]
-run = ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port 8000 --reload"]
+run = ["sh", "-c", "python -c 'from database import create_db_and_tables; create_db_and_tables()' && uvicorn main:app --host 0.0.0.0 --port 8000"]
 build = ["sh", "-c", "echo \"no build\""]
 deploymentTarget = "cloudrun"
 
