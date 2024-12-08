@@ -178,10 +178,6 @@ graph = StateGraph(GraphState)
 graph.add_node('supervisor',
                supervisor_agent,
                retry=RetryPolicy(max_attempts=2))
-graph.add_node('wikipedia',
-               search_wikipedia_node,
-               retry=RetryPolicy(max_attempts=2))
-graph.add_node('arxiv', search_arxiv_node, retry=RetryPolicy(max_attempts=2))
 graph.add_node('web', search_web_node, retry=RetryPolicy(max_attempts=2))
 graph.add_node('judgement', judge, retry=RetryPolicy(max_attempts=2))
 graph.add_node('review', review, retry=RetryPolicy(max_attempts=2))
@@ -189,13 +185,9 @@ graph.add_node('review', review, retry=RetryPolicy(max_attempts=2))
 graph.add_edge(START, 'supervisor')
 graph.add_conditional_edges(
     'supervisor', lambda x: x['next'], {
-        'search_wikipedia': 'wikipedia',
-        'search_arxiv': 'arxiv',
         'search_web': 'web',
         'JudgeStatement': 'judgement'
     })
-graph.add_edge('wikipedia', 'supervisor')
-graph.add_edge('arxiv', 'supervisor')
 graph.add_edge('web', 'supervisor')
 graph.add_edge('judgement', 'review')
 
@@ -205,7 +197,7 @@ graph.add_conditional_edges('review', lambda x: x['next'], {
 })
 
 agent_graph = graph.compile()
-agent_graph.name = "Multi-Agent Statement Checker"
+agent_graph.name = "Multi-Agent AlphaDRY"
 
 ## As Chain
 get_state = lambda x: GraphState(**x)
@@ -213,8 +205,8 @@ get_verdict = lambda x: x['verdict']
 get_messages = lambda x: [HumanMessage(x['statement'])]
 get_improved = lambda x: False
 
-multi_agent_fact_check = (
+multi_agent_seek_alpha = (
     RunnablePassthrough.assign(messages=get_messages, improved=get_improved)
     | get_state | agent_graph
     | get_verdict
-).with_config({"run_name": "Multi-Agent Statement Checker"})
+).with_config({"run_name": "Multi-Agent AlphaDRY"})

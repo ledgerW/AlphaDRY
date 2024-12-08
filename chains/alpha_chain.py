@@ -64,11 +64,6 @@ chain = (
     | PydanticToolsParser(tools=tools, first_tool_only=True, name='alpha')
 ).with_config({"run_name": "Get Alpha"})
 
-#dspy_chain = (
-#    LangChainPredict(prompt, llm.bind_tools(tools))
-#    | PydanticToolsParser(tools=tools, first_tool_only=True)
-#)
-
 
 def init_chain(settings: Dict):
     llm = ChatOpenAI(model=settings["Model"], streaming=True)
