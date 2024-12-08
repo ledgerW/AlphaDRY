@@ -1,7 +1,32 @@
-from database import create_warpcast, get_warpcast_by_hash, get_warpcasts_by_username, get_all_warpcasts, create_db_and_tables
+from database import create_warpcast, get_warpcast_by_hash, get_warpcasts_by_username, get_all_warpcasts, create_db_and_tables, get_engine, get_env_prefix
 from schemas import Warpcast
 from datetime import datetime
 import os
+from sqlalchemy import text
+
+def reset_tables():
+    """Helper function to reset both dev and prod tables"""
+    engine = get_engine()
+    
+    # Reset dev table
+    os.environ["REPLIT_DEPLOYMENT"] = "0"
+    dev_prefix = get_env_prefix()
+    with engine.connect() as connection:
+        connection.execute(text(f"DROP TABLE IF EXISTS {dev_prefix}warpcasts"))
+        connection.commit()
+    create_db_and_tables()  # Recreate dev table
+    
+    # Reset prod table
+    os.environ["REPLIT_DEPLOYMENT"] = "1"
+    prod_prefix = get_env_prefix()
+    with engine.connect() as connection:
+        connection.execute(text(f"DROP TABLE IF EXISTS {prod_prefix}warpcasts"))
+        connection.commit()
+    create_db_and_tables()  # Recreate prod table
+    
+    # Reset back to dev environment
+    os.environ["REPLIT_DEPLOYMENT"] = "0"
+    create_db_and_tables()
 
 def create_test_warpcast(hash_value: str, username: str = "testuser") -> Warpcast:
     """Helper function to create test Warpcast objects"""
@@ -28,42 +53,55 @@ def create_test_warpcast(hash_value: str, username: str = "testuser") -> Warpcas
         recasts=0
     )
 
-def test_schema_separation():
-    """Test that dev and prod environments use separate schemas"""
-    print("\n=== Testing Schema Separation ===")
+def test_environment_separation():
+    """Test that dev and prod environments use separate tables"""
+    print("\n=== Testing Environment Separation ===")
     
-    # Test in dev environment
+    # Reset tables and ensure we're in dev environment
+    reset_tables()
     os.environ["REPLIT_DEPLOYMENT"] = "0"
     create_db_and_tables()
-    test_cast_dev = create_test_warpcast("test_schema_dev")
+    
+    # Test in dev environment
+    test_cast_dev = create_test_warpcast("test_env_dev")
     dev_result = create_warpcast(test_cast_dev)
     print(f"Dev environment cast created: {dev_result is not None}")
     
     # Get count of casts in dev
     dev_casts = len(get_all_warpcasts())
+    print(f"Dev casts count: {dev_casts}")
     
     # Test in prod environment
     os.environ["REPLIT_DEPLOYMENT"] = "1"
     create_db_and_tables()
-    test_cast_prod = create_test_warpcast("test_schema_prod")
+    test_cast_prod = create_test_warpcast("test_env_prod")
     prod_result = create_warpcast(test_cast_prod)
     print(f"Prod environment cast created: {prod_result is not None}")
     
     # Get count of casts in prod
     prod_casts = len(get_all_warpcasts())
+    print(f"Prod casts count: {prod_casts}")
     
     # Switch back to dev and verify count hasn't changed
     os.environ["REPLIT_DEPLOYMENT"] = "0"
     create_db_and_tables()
     dev_casts_after = len(get_all_warpcasts())
+    print(f"Dev casts count after: {dev_casts_after}")
     
-    print(f"Schema separation working: {dev_casts == dev_casts_after and dev_casts != prod_casts}")
+    # Verify environment separation
+    env_separation_working = (
+        dev_casts == 1 and  # Dev has one cast
+        prod_casts == 1 and  # Prod has one cast
+        dev_casts == dev_casts_after  # Dev count unchanged after prod operations
+    )
+    print(f"Environment separation working: {env_separation_working}")
 
 def test_uniqueness_constraint():
     """Test that duplicate hashes are prevented"""
     print("\n=== Testing Uniqueness Constraint ===")
     
-    # Ensure we're in dev environment
+    # Reset tables and ensure we're in dev environment
+    reset_tables()
     os.environ["REPLIT_DEPLOYMENT"] = "0"
     create_db_and_tables()
     
@@ -86,7 +124,8 @@ def test_crud_operations():
     """Test Create, Read, Update, Delete operations"""
     print("\n=== Testing CRUD Operations ===")
     
-    # Ensure we're in dev environment
+    # Reset tables and ensure we're in dev environment
+    reset_tables()
     os.environ["REPLIT_DEPLOYMENT"] = "0"
     create_db_and_tables()
     
@@ -116,7 +155,7 @@ def run_all_tests():
     create_db_and_tables()
     
     # Run tests
-    test_schema_separation()
+    test_environment_separation()
     test_uniqueness_constraint()
     test_crud_operations()
     

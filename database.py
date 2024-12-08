@@ -1,36 +1,37 @@
-from sqlmodel import SQLModel, Field, create_engine, Session, select
+from sqlmodel import SQLModel, Field, create_engine, Session
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 import os
 from dotenv import load_dotenv
-from sqlalchemy import JSON, Column, text, MetaData, Table
+from sqlalchemy import JSON, Column
 from schemas import Warpcast
 
 load_dotenv()
 
 # Global variables for database connection
 _engine = None
-_current_schema = None
+_env_prefix = None
+_model_cache = {}
 
-def get_schema() -> str:
-    """Get the current schema based on environment."""
+def get_env_prefix() -> str:
+    """Get the current environment prefix for table names."""
     is_deployed = os.getenv("REPLIT_DEPLOYMENT") == "1"
-    return "prod" if is_deployed else "dev"
+    return "prod_" if is_deployed else "dev_"
 
 def get_engine():
-    """Get or create SQLAlchemy engine with proper schema."""
-    global _engine, _current_schema
+    """Get or create SQLAlchemy engine."""
+    global _engine, _env_prefix
     
-    new_schema = get_schema()
+    new_prefix = get_env_prefix()
     
-    # If schema has changed or engine doesn't exist, create new engine
-    if _engine is None or new_schema != _current_schema:
+    # If environment changed or engine doesn't exist, create new engine
+    if _engine is None or new_prefix != _env_prefix:
         # Dispose of old engine if it exists
         if _engine is not None:
             _engine.dispose()
         
         # Create new engine
-        _current_schema = new_schema
+        _env_prefix = new_prefix
         DATABASE_URL = os.getenv("DATABASE_URL")
         if not DATABASE_URL:
             raise ValueError("DATABASE_URL environment variable is required")
@@ -41,108 +42,92 @@ def get_engine():
             max_overflow=10,
             pool_timeout=30,
             pool_recycle=1800,
-            echo=new_schema == "dev"  # Enable SQL logging in development environment
+            echo=_env_prefix.startswith("dev_")  # Enable SQL logging in development environment
         )
     
     return _engine
 
-# Create SQLModel for Warpcast
-class WarpcastDB(SQLModel, table=True):
-    __tablename__ = "warpcasts"
-    
-    # Set schema and table constraints
-    __table_args__ = (
-        {'schema': get_schema()}
-    )
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    raw_cast: Dict[str, Any] = Field(sa_column=Column(JSON))
-    hash: str = Field(unique=True)
-    username: str = Field(index=True)
-    user_fid: int = Field(index=True)
-    text: str
-    timestamp: datetime
-    replies: int
-    reactions: int
-    recasts: int
+def create_warpcast_model(tablename: str):
+    """Create a new WarpcastDB model with the specified table name."""
+    class WarpcastDB(SQLModel, table=True):
+        __tablename__ = tablename
+        
+        id: Optional[int] = Field(default=None, primary_key=True)
+        raw_cast: Dict[str, Any] = Field(sa_column=Column(JSON))
+        hash: str = Field(unique=True)
+        username: str = Field(index=True)
+        user_fid: int = Field(index=True)
+        text: str
+        timestamp: datetime
+        replies: int
+        reactions: int
+        recasts: int
 
-    @classmethod
-    def from_warpcast(cls, warpcast: Warpcast) -> "WarpcastDB":
-        return cls(
-            raw_cast=warpcast.raw_cast,
-            hash=warpcast.hash,
-            username=warpcast.username,
-            user_fid=warpcast.user_fid,
-            text=warpcast.text,
-            timestamp=warpcast.timestamp,
-            replies=warpcast.replies,
-            reactions=warpcast.reactions,
-            recasts=warpcast.recasts
-        )
+        @classmethod
+        def from_warpcast(cls, warpcast: Warpcast) -> "WarpcastDB":
+            return cls(
+                raw_cast=warpcast.raw_cast,
+                hash=warpcast.hash,
+                username=warpcast.username,
+                user_fid=warpcast.user_fid,
+                text=warpcast.text,
+                timestamp=warpcast.timestamp,
+                replies=warpcast.replies,
+                reactions=warpcast.reactions,
+                recasts=warpcast.recasts
+            )
 
-    def to_warpcast(self) -> Warpcast:
-        return Warpcast(
-            raw_cast=self.raw_cast,
-            hash=self.hash,
-            username=self.username,
-            user_fid=self.user_fid,
-            text=self.text,
-            timestamp=self.timestamp,
-            replies=self.replies,
-            reactions=self.reactions,
-            recasts=self.recasts
-        )
+        def to_warpcast(self) -> Warpcast:
+            return Warpcast(
+                raw_cast=self.raw_cast,
+                hash=self.hash,
+                username=self.username,
+                user_fid=self.user_fid,
+                text=self.text,
+                timestamp=self.timestamp,
+                replies=self.replies,
+                reactions=self.reactions,
+                recasts=self.recasts
+            )
+    
+    return WarpcastDB
+
+def get_model():
+    """Get the appropriate WarpcastDB model for the current environment."""
+    global _model_cache
+    
+    env_prefix = get_env_prefix()
+    if env_prefix not in _model_cache:
+        tablename = f"{env_prefix}warpcasts"
+        _model_cache[env_prefix] = create_warpcast_model(tablename)
+    
+    return _model_cache[env_prefix]
 
 def create_db_and_tables():
-    """Create schema and all database tables. Safe to call on startup."""
+    """Create all database tables. Safe to call on startup."""
     engine = get_engine()
-    schema = get_schema()
-    
-    # Create schema if it doesn't exist
-    with engine.connect() as connection:
-        connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
-        connection.commit()
-        
-        # Create table with explicit schema reference
-        create_table_sql = f"""
-        CREATE TABLE IF NOT EXISTS {schema}.warpcasts (
-            id SERIAL PRIMARY KEY,
-            raw_cast JSONB,
-            hash VARCHAR UNIQUE,
-            username VARCHAR,
-            user_fid INTEGER,
-            text TEXT,
-            timestamp TIMESTAMP,
-            replies INTEGER,
-            reactions INTEGER,
-            recasts INTEGER
-        );
-        CREATE INDEX IF NOT EXISTS idx_{schema}_warpcasts_username ON {schema}.warpcasts (username);
-        CREATE INDEX IF NOT EXISTS idx_{schema}_warpcasts_user_fid ON {schema}.warpcasts (user_fid);
-        """
-        connection.execute(text(create_table_sql))
-        connection.commit()
+    Model = get_model()
+    SQLModel.metadata.create_all(engine)
 
 def get_session():
-    """Get a new database session using the current schema."""
+    """Get a new database session."""
     return Session(get_engine())
 
-def create_warpcast(warpcast: Warpcast) -> Optional[WarpcastDB]:
+def create_warpcast(warpcast: Warpcast) -> Optional[Any]:
     """
     Create a new warpcast entry if it doesn't exist.
     Returns None if a warpcast with the same hash already exists.
     """
+    Model = get_model()
     with get_session() as session:
         try:
             # Check if warpcast already exists
-            existing = session.exec(
-                select(WarpcastDB).where(WarpcastDB.hash == warpcast.hash)
-            ).first()
+            existing = session.query(Model).filter(Model.hash == warpcast.hash).first()
             
             if existing:
                 return None
                 
-            db_warpcast = WarpcastDB.from_warpcast(warpcast)
+            db_warpcast = Model.from_warpcast(warpcast)
             session.add(db_warpcast)
             session.commit()
             session.refresh(db_warpcast)
@@ -153,21 +138,21 @@ def create_warpcast(warpcast: Warpcast) -> Optional[WarpcastDB]:
             return None
 
 def get_warpcast_by_hash(hash: str) -> Optional[Warpcast]:
+    Model = get_model()
     with get_session() as session:
-        statement = select(WarpcastDB).where(WarpcastDB.hash == hash)
-        db_warpcast = session.exec(statement).first()
+        db_warpcast = session.query(Model).filter(Model.hash == hash).first()
         return db_warpcast.to_warpcast() if db_warpcast else None
 
 def get_warpcasts_by_username(username: str) -> List[Warpcast]:
+    Model = get_model()
     with get_session() as session:
-        statement = select(WarpcastDB).where(WarpcastDB.username == username)
-        db_warpcasts = session.exec(statement).all()
+        db_warpcasts = session.query(Model).filter(Model.username == username).all()
         return [cast.to_warpcast() for cast in db_warpcasts]
 
 def get_all_warpcasts() -> List[Warpcast]:
+    Model = get_model()
     with get_session() as session:
-        statement = select(WarpcastDB)
-        db_warpcasts = session.exec(statement).all()
+        db_warpcasts = session.query(Model).all()
         return [cast.to_warpcast() for cast in db_warpcasts]
 
 if __name__ == "__main__":
