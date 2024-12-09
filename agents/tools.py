@@ -27,11 +27,6 @@ def extract_token_data(token_symbol: str, pool_data: dict) -> Optional[TokenData
         return None
         
     pool_name = pool_data['data'][0]['attributes']['name']
-    is_token = token_symbol.lower() in pool_name.lower()
-    
-    if not is_token:
-        return None
-        
     chain = pool_data['data'][0]['relationships']['base_token']['data']['id'].split('_')[0]
     address = pool_data['data'][0]['relationships']['base_token']['data']['id'].split('_')[1]
     attributes = pool_data['data'][0]['attributes']
