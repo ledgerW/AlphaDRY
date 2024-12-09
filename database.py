@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import JSON, Column, Enum as SQLEnum, inspect
 from schemas import Warpcast
-from agents.multi_agent_alpha_scout import Chain
+from agents.models import Chain
 import time
 
 load_dotenv()
