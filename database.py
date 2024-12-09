@@ -1,10 +1,12 @@
-from sqlmodel import SQLModel, Field, create_engine, Session
+from sqlmodel import SQLModel, Field, create_engine, Session, Relationship
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 import os
 from dotenv import load_dotenv
-from sqlalchemy import JSON, Column
+from sqlalchemy import JSON, Column, Enum as SQLEnum, inspect
 from schemas import Warpcast
+from agents.multi_agent_alpha_scout import Chain
+import time
 
 load_dotenv()
 
@@ -42,10 +44,49 @@ def get_engine():
             max_overflow=10,
             pool_timeout=30,
             pool_recycle=1800,
+            pool_pre_ping=True,  # Enable connection health checks
+            connect_args={
+                "connect_timeout": 10,  # Connection timeout in seconds
+                "keepalives": 1,        # Enable keepalive
+                "keepalives_idle": 30,  # Idle time before sending keepalive
+                "keepalives_interval": 10,  # Interval between keepalives
+                "keepalives_count": 5    # Number of keepalive retries
+            },
             echo=_env_prefix.startswith("dev_")  # Enable SQL logging in development environment
         )
     
     return _engine
+
+class TokenOpportunityDB(SQLModel, table=True):
+    """Database model for token investment opportunities"""
+    __tablename__ = f"{get_env_prefix()}token_opportunities"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    chain: Chain = Field(sa_column=Column(SQLEnum(Chain)))
+    contract_address: Optional[str]
+    market_cap: Optional[float]
+    community_score: int
+    safety_score: int
+    justification: str
+    sources: List[str] = Field(sa_column=Column(JSON))
+    
+    # Relationship with AlphaReport
+    report_id: Optional[int] = Field(default=None, foreign_key=f"{get_env_prefix()}alpha_reports.id")
+    report: Optional["AlphaReportDB"] = Relationship(back_populates="opportunities")
+
+class AlphaReportDB(SQLModel, table=True):
+    """Database model for alpha reports"""
+    __tablename__ = f"{get_env_prefix()}alpha_reports"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    is_relevant: bool
+    analysis: str
+    message: str  # Original message input
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationship with TokenOpportunity
+    opportunities: List[TokenOpportunityDB] = Relationship(back_populates="report")
 
 def create_warpcast_model(tablename: str):
     """Create a new WarpcastDB model with the specified table name."""
@@ -105,15 +146,106 @@ def get_model():
     
     return _model_cache[env_prefix]
 
-def create_db_and_tables():
-    """Create all database tables. Safe to call on startup."""
+def tables_exist() -> bool:
+    """Check if all required tables exist."""
     engine = get_engine()
-    Model = get_model()
-    
-    # Drop all tables first
+    inspector = inspect(engine)
+    env_prefix = get_env_prefix()
+    required_tables = [
+        f"{env_prefix}token_opportunities",
+        f"{env_prefix}alpha_reports",
+        f"{env_prefix}warpcasts"
+    ]
+    existing_tables = inspector.get_table_names()
+    return all(table in existing_tables for table in required_tables)
+
+def populate_dev_data():
+    """Populate development tables with dummy data."""
+    if get_env_prefix() != "dev_":
+        return
+
+    # Create alpha reports and opportunities in a separate transaction
+    with get_session() as session:
+        try:
+            # Create a sample alpha report
+            report = AlphaReportDB(
+                is_relevant=True,
+                analysis="This is a sample analysis of market opportunities",
+                message="Sample input message"
+            )
+            session.add(report)
+            session.flush()
+
+            # Create sample token opportunities
+            opportunities = [
+                TokenOpportunityDB(
+                    name="Sample Token 1",
+                    chain=Chain.BASE,
+                    contract_address="0x1234567890abcdef",
+                    market_cap=1000000.0,
+                    community_score=8,
+                    safety_score=7,
+                    justification="Strong community and solid fundamentals",
+                    sources=["source1.com", "source2.com"],
+                    report_id=report.id
+                ),
+                TokenOpportunityDB(
+                    name="Sample Token 2",
+                    chain=Chain.SOLANA,
+                    contract_address="SOL123456789",
+                    market_cap=500000.0,
+                    community_score=6,
+                    safety_score=8,
+                    justification="Innovative technology with growing adoption",
+                    sources=["source3.com", "source4.com"],
+                    report_id=report.id
+                )
+            ]
+            for opp in opportunities:
+                session.add(opp)
+            
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Error creating alpha reports: {e}")
+
+    # Create warpcast data in a separate transaction
+    with get_session() as session:
+        try:
+            Model = get_model()
+            warpcast = Model(
+                raw_cast={"sample": "data"},
+                hash="sample_hash_123",
+                username="test_user",
+                user_fid=12345,
+                text="This is a sample warpcast message",
+                timestamp=datetime.utcnow(),
+                replies=5,
+                reactions=10,
+                recasts=3,
+                pulled_from_user="sample_puller"
+            )
+            session.add(warpcast)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Error creating warpcast: {e}")
+
+def reset_db():
+    """Drop all tables and recreate them with fresh dummy data."""
+    engine = get_engine()
     SQLModel.metadata.drop_all(engine)
-    # Create tables
     SQLModel.metadata.create_all(engine)
+    populate_dev_data()
+
+def create_db_and_tables(force_reset: bool = False):
+    """Create database tables if they don't exist and populate dev data."""
+    if force_reset:
+        reset_db()
+    elif not tables_exist():
+        engine = get_engine()
+        SQLModel.metadata.create_all(engine)
+        populate_dev_data()
 
 def get_session():
     """Get a new database session."""
@@ -160,6 +292,52 @@ def get_all_warpcasts() -> List[Warpcast]:
     with get_session() as session:
         db_warpcasts = session.query(Model).all()
         return [cast.to_warpcast() for cast in db_warpcasts]
+
+def create_alpha_report(report_data: Dict[str, Any]) -> Optional[AlphaReportDB]:
+    """Create a new alpha report with its associated token opportunities."""
+    max_retries = 3
+    retry_delay = 1  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            with get_session() as session:
+                # Create the report
+                report = AlphaReportDB(
+                    is_relevant=report_data["is_relevant"],
+                    analysis=report_data["analysis"],
+                    message=report_data.get("message", "")  # Get message from report data
+                )
+                session.add(report)
+                session.flush()  # Flush to get the report ID
+
+                # Create associated opportunities
+                for opp_data in report_data["opportunities"]:
+                    opportunity = TokenOpportunityDB(
+                        report_id=report.id,
+                        **opp_data
+                    )
+                    session.add(opportunity)
+
+                session.commit()
+                session.refresh(report)
+                return report
+                
+        except Exception as e:
+            print(f"Error creating alpha report (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                continue
+            return None
+
+def get_alpha_report(report_id: int) -> Optional[AlphaReportDB]:
+    """Get an alpha report by ID."""
+    with get_session() as session:
+        return session.get(AlphaReportDB, report_id)
+
+def get_all_alpha_reports() -> List[AlphaReportDB]:
+    """Get all alpha reports."""
+    with get_session() as session:
+        return session.query(AlphaReportDB).all()
 
 if __name__ == "__main__":
     create_db_and_tables()
