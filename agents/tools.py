@@ -38,7 +38,7 @@ def extract_token_data(token_symbol: str, pool_data: dict) -> Optional[TokenData
     
     # Extract symbol from pool name (e.g. "CLANKER / WETH 1%" -> "CLANKER")
     symbol = pool_name.split('/')[0].strip()
-    if symbol != token_symbol:
+    if token_symbol.lower() not in [symbol.lower(), address.lower()]:
         return None
     
     return TokenData(
