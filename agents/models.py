@@ -15,7 +15,7 @@ class TokenOpportunity(BaseModel):
     name: str = Field(description="Name of the token")
     chain: Chain = Field(description="The blockchain the token is on (Base or Solana)")
     contract_address: Optional[str] = Field(description="Contract address of the token if available")
-    market_cap: Optional[float] = Field(description="Current market cap or (FDV) in USD if available")
+    market_cap: Optional[float] = Field(description="fdv_usd value in Token Data, if available, or market cap in USD")
     community_score: int = Field(description="Score from 1-10 rating the strength and reputation of the community")
     safety_score: int = Field(description="Score from 1-10 rating the safety of the contract and team")
     justification: str = Field(description="Detailed explanation of why this token is a good opportunity")

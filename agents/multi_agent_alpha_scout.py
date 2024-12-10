@@ -25,7 +25,7 @@ from typing import Literal
 from enum import Enum
 from datetime import datetime
 
-from agents.models import AlphaReport
+from agents.models import AlphaReport, TokenData
 from agents.tools import quick_search, deep_search, GenerateReport, get_token_data
 
 
@@ -35,6 +35,7 @@ class GraphState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     research: Optional[List[ToolMessage]]
     report: Optional[AlphaReport]
+    token_data: Optional[TokenData]
     review_feedback: Optional[str]
     next: str
     quick_search_count: int
@@ -77,6 +78,9 @@ def research_agent(state: GraphState) -> GraphState:
     deep_search_remaining = 3 - state['deep_search_count']
     get_token_data_remaining = 3 - state['get_token_data_count']
 
+    research = [msg for msg in state['messages'] if isinstance(msg, ToolMessage)]
+    token_data = [msg for msg in research if msg.name == "get_token_data"]
+
     if 'review_feedback' not in state:
         state['review_feedback'] = None
     
@@ -100,7 +104,11 @@ IMPORTANT: You have limited tool usage available:
 - Get Token Data: {get_token_data_remaining} remaining
 
 When you reach the search limits, you must generate your report with the information gathered.
-You must also use the Get Token Data tool at least once."""),
+You must also use the Get Token Data tool at least once.
+
+Initial message:
+{state['messages'][0]}
+"""),
         MessagesPlaceholder(variable_name="messages"),
         SystemMessage(content=f"""Based on the work done so far and your remaining tool usage limits, what's your next action?
 - Use quick_search to gather basic information (if searches remain)
@@ -127,7 +135,6 @@ You must use one of your available tools.""")
         "messages": state["messages"]
     })
     
-    research = [msg for msg in state['messages'] if isinstance(msg, ToolMessage)]
     next, tool_names = next_action(message, state)
     
     # Update search counters
@@ -145,6 +152,7 @@ You must use one of your available tools.""")
     return {
         'messages': [message], 
         'research': research, 
+        'token_data': token_data,
         'next': next,
         'quick_search_count': new_quick_count,
         'deep_search_count': new_deep_count,
@@ -158,6 +166,10 @@ def generate_report(state: GraphState) -> GraphState:
     
     messages = [msg.content for msg in state['messages'] if isinstance(msg, HumanMessage)]
     research = state['research']
+    if 'token_data' in state:
+        token_data = state['token_data']
+    else:
+        token_data = None
 
     prompt = ChatPromptTemplate.from_messages([
         SystemMessage(content="""You are an expert crypto analyst specializing in early-stage tokens and memecoins.
@@ -170,13 +182,19 @@ Key criteria:
 - Early stage with growth potential
 
 Only include opportunities that meet these criteria and have strong supporting evidence."""),
-        HumanMessage(content=f"""Messages to analyze:
-{messages}
+        HumanMessage(content=f"""Initial message:
+{state['messages'][0]}
 
 Available research:
 {research}
 
-Generate a detailed report identifying any promising token opportunities. Focus on safety and evidence-based analysis.""")
+
+Token Data:
+{state['token_data']}
+
+
+Generate a detailed report identifying any promising token opportunities. Focus on safety and evidence-based analysis.
+Use the Token Data to populate TokenOpportunity fields as much as possible.""")
     ])
 
     tools = [AlphaReport]
