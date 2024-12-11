@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 import os
 from dotenv import load_dotenv
-from sqlalchemy import JSON, Column, Enum as SQLEnum, inspect
+from sqlalchemy import JSON, Column, Enum as SQLEnum, inspect, text
 from schemas import Warpcast
 from agents.models import Chain
 import time
@@ -70,6 +70,8 @@ class TokenOpportunityDB(SQLModel, table=True):
     safety_score: int
     justification: str
     sources: List[str] = Field(sa_column=Column(JSON))
+    recommendation: str = Field(default="Hold")  # Buy/Hold/Sell recommendation
+    created_at: datetime = Field(default_factory=datetime.utcnow)  # Added created_at field
     
     # Relationship with AlphaReport
     report_id: Optional[int] = Field(default=None, foreign_key=f"{get_env_prefix()}alpha_reports.id")
@@ -187,6 +189,7 @@ def populate_dev_data():
                     safety_score=7,
                     justification="Strong community and solid fundamentals",
                     sources=["source1.com", "source2.com"],
+                    recommendation="Buy",
                     report_id=report.id
                 ),
                 TokenOpportunityDB(
@@ -198,6 +201,7 @@ def populate_dev_data():
                     safety_score=8,
                     justification="Innovative technology with growing adoption",
                     sources=["source3.com", "source4.com"],
+                    recommendation="Hold",
                     report_id=report.id
                 )
             ]
@@ -234,7 +238,20 @@ def populate_dev_data():
 def reset_db():
     """Drop all tables and recreate them with fresh dummy data."""
     engine = get_engine()
-    SQLModel.metadata.drop_all(engine)
+    env_prefix = get_env_prefix()
+    
+    # Drop tables in correct order to handle dependencies
+    with engine.begin() as conn:
+        # Drop tables first
+        conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}token_opportunities CASCADE"))
+        conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}alpha_reports CASCADE"))
+        conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}warpcasts CASCADE"))
+        
+        # Only drop the enum type if we're in dev environment
+        if env_prefix == "dev_":
+            conn.execute(text("DROP TYPE IF EXISTS chain CASCADE"))
+    
+    # Recreate tables
     SQLModel.metadata.create_all(engine)
     populate_dev_data()
 
@@ -305,13 +322,23 @@ def create_alpha_report(report_data: Dict[str, Any]) -> Optional[AlphaReportDB]:
                 report = AlphaReportDB(
                     is_relevant=report_data["is_relevant"],
                     analysis=report_data["analysis"],
-                    message=report_data.get("message", "")  # Get message from report data
+                    message=report_data.get("message", "")
                 )
                 session.add(report)
                 session.flush()  # Flush to get the report ID
 
                 # Create associated opportunities
                 for opp_data in report_data["opportunities"]:
+                    # Handle chain conversion
+                    chain_value = opp_data.get('chain')
+                    if isinstance(chain_value, str):
+                        # Try to match the chain value case-insensitively
+                        chain_value = chain_value.upper()
+                        if chain_value == 'BASE':
+                            opp_data['chain'] = Chain.BASE
+                        elif chain_value == 'SOLANA':
+                            opp_data['chain'] = Chain.SOLANA
+                        
                     opportunity = TokenOpportunityDB(
                         report_id=report.id,
                         **opp_data

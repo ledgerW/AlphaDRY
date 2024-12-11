@@ -1,9 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.templating import Jinja2Templates
 import uvicorn
+import os
+from dotenv import load_dotenv
 from routers import api
 from database import create_db_and_tables
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -15,12 +19,18 @@ async def startup_event():
 # Mount the API router
 app.include_router(api.router)
 
-# Serve static files
-app.mount("/static", StaticFiles(directory="."), name="static")
+# Serve static files from the static directory
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Configure templates
+templates = Jinja2Templates(directory=".")
 
 @app.get("/")
-async def read_index():
-    return FileResponse("index.html")
+async def read_index(request: Request):
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "api_key": os.getenv("API_KEY", "")
+    })
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

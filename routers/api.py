@@ -15,7 +15,9 @@ from langchain_openai import ChatOpenAI
 
 from chains.seek_alpha_chain import base_seek_alpha, multi_hop_seek_alpha
 from chains.alpha_chain import Alpha
-from agents.multi_agent_alpha_scout import multi_agent_alpha_scout, AlphaReport
+from agents.multi_agent_alpha_scout import multi_agent_alpha_scout
+from agents.models import TokenAlpha, Chain
+from agents.tools import IsTokenReport
 from database import create_alpha_report, get_all_alpha_reports, TokenOpportunityDB, AlphaReportDB, get_session
 
 load_dotenv()
@@ -53,18 +55,20 @@ async def get_alpha_reports():
                     "id": report.id,
                     "is_relevant": report.is_relevant,
                     "analysis": report.analysis,
-                    "message": report.message,  # Include original message
-                    "created_at": report.created_at.isoformat(),  # Properly format datetime
+                    "message": report.message,
+                    "created_at": report.created_at.isoformat(),
                     "opportunities": [
                         {
                             "name": opp.name,
-                            "chain": str(opp.chain),  # Convert enum to string
+                            "chain": str(opp.chain),
                             "contract_address": opp.contract_address,
-                            "market_cap": float(opp.market_cap) if opp.market_cap else None,  # Handle decimal
+                            "market_cap": float(opp.market_cap) if opp.market_cap else None,
                             "community_score": opp.community_score,
                             "safety_score": opp.safety_score,
                             "justification": opp.justification,
-                            "sources": opp.sources
+                            "sources": opp.sources,
+                            "recommendation": opp.recommendation,
+                            "created_at": opp.created_at.isoformat()
                         }
                         for opp in report.opportunities
                     ]
@@ -72,7 +76,7 @@ async def get_alpha_reports():
                 for report in reports
             ]
     except Exception as e:
-        print(f"Error in get_alpha_reports: {str(e)}")  # Log the error
+        print(f"Error in get_alpha_reports: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch reports: {str(e)}"
@@ -105,27 +109,31 @@ async def get_multi_hop_seek_alpha(token: Token):
 @router.post(
     "/multi_agent_alpha_scout",
     dependencies=[Depends(api_key_auth)],
-    response_model=AlphaReport
+    response_model=TokenAlpha
 )
-async def get_multi_agent_alpha_scout(messages: List[str]):
-    try:
-        alpha = await multi_agent_alpha_scout.ainvoke({'messages': messages})
-        alpha = AlphaReport(**alpha)
-        
-        # Save the report to database
-        report_data = {
-            "is_relevant": alpha.is_relevant,
-            "analysis": alpha.analysis,
-            "message": messages[0] if messages else "",  # Save the first message as input
-            "opportunities": [opp.dict() for opp in alpha.opportunities]
-        }
-        db_report = create_alpha_report(report_data)
-        if not db_report:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to save report to database"
-            )
-        
-        return alpha
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+async def get_multi_agent_alpha_scout(token_report: IsTokenReport):
+    #try:
+    # Pass the token report to the alpha scout agent
+    token_alpha = await multi_agent_alpha_scout.ainvoke({
+        'messages': [token_report.reasoning],
+        'token_report': token_report.dict()
+    })
+    
+    # Create report in database
+    report_data = {
+        "is_relevant": token_report.mentions_purchasable_token,
+        "analysis": token_report.reasoning,
+        "message": token_report.reasoning,
+        "opportunities": [token_alpha]
+    }
+    
+    db_report = create_alpha_report(report_data)
+    if not db_report:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to save report to database"
+        )
+    
+    return token_alpha
+    #except Exception as e:
+    #    raise HTTPException(status_code=500, detail=str(e))
