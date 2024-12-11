@@ -13,7 +13,8 @@
     "RUN PYTHONDONTWRITEBYTECODE=1 pip install -c /api/constraints.txt -e ."
   ],
   "graphs": {
-    "alpha_scout": "agents/multi_agent_alpha_scout.py:agent_graph"
+    "alpha_scout": "agents/multi_agent_alpha_scout.py:agent_graph",
+    "token_finder": "agents/multi_agent_token_finder.py:agent_graph"
   },
   "env": ".env",
   "python_version": "3.11",
