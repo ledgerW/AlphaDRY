@@ -11,31 +11,27 @@ from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AI
 from langchain_core.output_parsers import PydanticToolsParser
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
-from langchain_core.documents.base import Document
-from operator import itemgetter
 
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import ToolNode
 from langgraph.graph import StateGraph, START, END
-from langgraph.pregel import RetryPolicy
 
 from pydantic import BaseModel, Field
 from typing import Literal
-from enum import Enum
 from datetime import datetime
 
-from agents.models import AlphaReport, TokenData
-from agents.tools import quick_search, deep_search, GenerateReport, get_token_data
-
+from agents.models import TokenAlpha, TokenData, Chain, TransactionData
+from agents.tools import quick_search, deep_search, get_token_data, IsTokenReport, GenerateAlpha
 
 
 # State
 class GraphState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     research: Optional[List[ToolMessage]]
-    report: Optional[AlphaReport]
-    token_data: Optional[TokenData]
+    token_report: Optional[IsTokenReport]
+    transaction_data: Optional[TransactionData]
+    alpha: Optional[TokenAlpha]
     review_feedback: Optional[str]
     next: str
     quick_search_count: int
@@ -46,7 +42,7 @@ class GraphState(TypedDict):
 
 # Research Agent
 def research_agent(state: GraphState) -> GraphState:
-    """Agent that performs research on potential token opportunities"""
+    """Agent that performs research on the token opportunity"""
 
     def next_action(message: AIMessage, state: GraphState) -> tuple[str, list[str]]:
         if not message.tool_calls:
@@ -62,7 +58,7 @@ def research_agent(state: GraphState) -> GraphState:
             if (tool_name == 'quick_search' and state['quick_search_count'] >= 3) or \
                 (tool_name == 'deep_search' and state['deep_search_count'] >= 3) or \
                 (tool_name == 'get_token_data' and state['get_token_data_count'] >= 2):
-                return 'GenerateReport', tool_names
+                return 'GenerateAlpha', tool_names
         
         # If we get here, either no search tools were used or none hit their limits
         if any(name in ['quick_search', 'deep_search', 'get_token_data'] for name in tool_names):
@@ -71,59 +67,62 @@ def research_agent(state: GraphState) -> GraphState:
         # For any other tool calls
         return tool_names[0], tool_names
 
-    tools = [quick_search, deep_search, get_token_data, GenerateReport]
+    tools = [quick_search, deep_search, get_token_data, GenerateAlpha]
 
     # Calculate remaining searches
     quick_search_remaining = 3 - state['quick_search_count']
     deep_search_remaining = 3 - state['deep_search_count']
-    get_token_data_remaining = 3 - state['get_token_data_count']
+    get_token_data_remaining = 2 - state['get_token_data_count']
 
+    # Get research messages
     research = [msg for msg in state['messages'] if isinstance(msg, ToolMessage)]
-    token_data = [msg for msg in research if msg.name == "get_token_data"]
+    token_report = state.get('token_report', None)
+
+    # Find get_token_data message and extract transaction data
+    transaction_data = None
+    for msg in reversed(research):
+        if msg.name == 'get_token_data' and msg.content:
+            #try:
+            # Convert string content to dict if needed
+            transaction_data = msg.content
+            break
 
     if 'review_feedback' not in state:
         state['review_feedback'] = None
     
     prompt = ChatPromptTemplate.from_messages([
-        SystemMessage(content=f"""You are an expert crypto researcher focused on identifying promising early-stage tokens.
-Your goal is to gather comprehensive information about potential opportunities mentioned in messages.
-First, determine if the messages are relevant to token opportunities, and if so, gather information about the token, including 
-token data from the get_token_data tool.
-
-It's very important to get the structured token data from the get_token_data tool, if it's available.
+        SystemMessage(content=f"""You are an expert crypto researcher focused on analyzing token opportunities.
+Your goal is to research the provided token and determine if it represents a good investment opportunity.
 
 Focus your research on:
-1. Token contracts and audits
-2. Market cap and trading data
-3. Community activity and team reputation
+1. Market cap and trading data
+2. Community activity and team reputation
+3. Contract safety and audits
 4. Recent developments and announcements
+
+Token Information:
+Symbol: {token_report['token_symbol'] if token_report else 'Unknown'}
+Chain: {token_report['token_chain'] if token_report else 'Unknown'}
+Address: {token_report['token_address'] if token_report else 'Unknown'}
 
 IMPORTANT: You have limited tool usage available:
 - Quick Search: {quick_search_remaining} remaining
 - Deep Search: {deep_search_remaining} remaining
 - Get Token Data: {get_token_data_remaining} remaining
 
-When you reach the search limits, you must generate your report with the information gathered.
-You must also use the Get Token Data tool at least once.
-
-Initial message:
-{state['messages'][0]}
-"""),
-        MessagesPlaceholder(variable_name="messages"),
-        SystemMessage(content=f"""Based on the work done so far and your remaining tool usage limits, what's your next action?
-- Use quick_search to gather basic information (if searches remain)
-- Use deep_search to gather detailed information (if searches remain)
-- Use get_token_data to gather token data (if tool usage remains)
-- Use GenerateReport IF and ONLY IF:
-    - you have addressed all review feedback with follow-up research
-    - you have all the information you need
-    - you have reached search limits
-    - you have determined that the messages are not relevant to token opportunities
+Available tools:
+- quick_search: Use for initial research on token mentions, news, and basic information
+- deep_search: Use for detailed research on specific aspects like team, contracts, or developments
+- get_token_data: Use to fetch market data, trading info and DEX details for a specific token
+- GenerateAlpha: Use when you have sufficient research or have reached search limits to create the final analysis
 
 Review feedback:
 {state['review_feedback']}
 
-You must use one of your available tools.""")
+You must conduct follow-up research to address comments in the review feedback.
+
+You must use one of your available tools."""),
+        MessagesPlaceholder(variable_name="messages")
     ])
 
     llm = ChatOpenAI(model="gpt-4o", temperature=0.1, streaming=True, name='researcher_llm')\
@@ -134,7 +133,7 @@ You must use one of your available tools.""")
     message = chain.invoke({
         "messages": state["messages"]
     })
-    
+
     next, tool_names = next_action(message, state)
     
     # Update search counters
@@ -151,8 +150,9 @@ You must use one of your available tools.""")
     
     return {
         'messages': [message], 
-        'research': research, 
-        'token_data': token_data,
+        'research': research,
+        'token_report': token_report,
+        'transaction_data': transaction_data,
         'next': next,
         'quick_search_count': new_quick_count,
         'deep_search_count': new_deep_count,
@@ -160,65 +160,64 @@ You must use one of your available tools.""")
     }
 
 
-# Report Writer Agent
-def generate_report(state: GraphState) -> GraphState:
-    """Generate the final alpha report based on all research gathered"""
+# Alpha Writer Agent
+def generate_alpha(state: GraphState) -> GraphState:
+    """Generate the final token opportunity analysis based on all research gathered"""
     
-    messages = [msg.content for msg in state['messages'] if isinstance(msg, HumanMessage)]
     research = state['research']
-    if 'token_data' in state:
-        token_data = state['token_data']
-    else:
-        token_data = None
-
+    token_report = state['token_report']
+    transaction_data = state['transaction_data']
     prompt = ChatPromptTemplate.from_messages([
-        SystemMessage(content="""You are an expert crypto analyst specializing in early-stage tokens and memecoins.
-Your task is to analyze messages and research to identify promising token opportunities, focusing only on Base and Solana chains.
+        SystemMessage(content="""You are an expert crypto analyst specializing in early-stage tokens.
+Your task is to analyze the research and determine if this token represents a good investment opportunity.
 
 Key criteria:
 - Market cap below $5M
 - Active and reputable community
+- Trading momentum (are we early or late in the cycle?)
 - Safe and audited contracts
 - Early stage with growth potential
 
-Only include opportunities that meet these criteria and have strong supporting evidence."""),
-        HumanMessage(content=f"""Initial message:
-{state['messages'][0]}
+Only recommend tokens that meet these criteria and have strong supporting evidence."""),
+        HumanMessage(content=f"""Token Report:
+{token_report}
 
-Available research:
+
+Research:
 {research}
 
 
-Token Data:
-{state['token_data']}
+Transaction Data:
+{transaction_data}
 
 
-Generate a detailed report identifying any promising token opportunities. Focus on safety and evidence-based analysis.
-Use the Token Data to populate TokenOpportunity fields as much as possible.""")
+Generate a detailed token opportunity analysis. Focus on safety and evidence-based analysis.""")
     ])
 
-    tools = [AlphaReport]
-    llm = ChatOpenAI(model="gpt-4o", temperature=0.1, streaming=True, name='alpha_report_llm').bind_tools(tools)
+    tools = [TokenAlpha]
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.1, streaming=True, name='alpha_writer_llm')\
+        .bind_tools(tools, tool_choice='required')
+    
     chain = prompt | llm
 
-    result = chain.invoke({'messages': messages, 'research': research})
-    return {'report': result.tool_calls[0]['args']}
+    result = chain.invoke({})
+    return {'alpha': result.tool_calls[0]['args']}
 
 
 # Add this near the top with other models
 class ReviewFeedback(BaseModel):
-    """Feedback from the review of an alpha report"""
+    """Feedback from the review of a token opportunity analysis"""
     next: Annotated[
         Literal["research", "FINISH"],
-        "Does this Report need more research, or is it FINISHED?"
+        "Does this analysis need more research, or is it FINISHED?"
     ]
     comments: Annotated[
         str,
-        "If recommending more research, explain what needs to be investigated. If finished, summarize why the report is complete."
+        "If recommending more research, explain what needs to be investigated. If finished, summarize why the analysis is complete."
     ]
 
 def reviewer(state: GraphState) -> GraphState:
-    """Agent that reviews the generated report for completeness and accuracy"""
+    """Agent that reviews the generated opportunity analysis for completeness and accuracy"""
     
     tools = [ReviewFeedback]
     
@@ -229,43 +228,37 @@ def reviewer(state: GraphState) -> GraphState:
     
     prompt = ChatPromptTemplate.from_messages([
         SystemMessage(content=f"""You are an expert crypto research reviewer focused on ensuring thorough analysis of token opportunities.
-Your goal is to review the generated report and original messages to ensure:
+Your goal is to review the generated Token Alpha analysis to ensure:
 
-1. No potential opportunities were missed (especially check for ALL CAPS text that might be token symbols)
-2. All claims in the report are supported by research
-3. Important information isn't missing
-4. The logic and conclusions are sound
-5. If marked as "not relevant", verify this is correct
+1. All claims are supported by research
+2. Important information isn't missing
+3. The logic and conclusions are sound
+4. Risk factors are properly considered
 
-Available tool usage remaining:
-- Quick Search: {quick_search_remaining}
-- Deep Search: {deep_search_remaining}
-- Get Token Data: {get_token_data_remaining}
 
-A high quality report will:
+A high quality analysis will:
 a) Have complete information about the token opportunity
 b) Include evidence to support all claims
 c) Consider potential risks and red flags
-d) Not dismiss opportunities without thorough investigation
+d) Make a clear recommendation based on evidence
 
-Review the report carefully and decide if more research is needed or if it's ready to finalize.
-
-Original Messages:
-{state['messages'][0]}
-
-Report:
-{state['report']}
+Token Report:
+{state['token_report']}
 
 
-Review the report and research above. Consider:
-1. Any words in all CAPS in the original message must be quick searched at least once!
-2. If marked as "not relevant", are you sure? Crypto discussions often use unusual slang
-3. Is all important information included and verified?
-4. Are the conclusions supported by evidence?
+Token Alpha:
+{state['alpha']}
+
+
+Review the Alpha above. Consider:
+1. Is all important information included and verified?
+2. Are the conclusions supported by evidence?
+3. Have risks been properly assessed?
+4. Is the recommendation justified?
 
 Provide your review feedback using the ReviewFeedback tool.""")])
 
-    llm = ChatOpenAI(model="gpt-4", temperature=0.1, streaming=True, name='reviewer_llm')\
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.1, streaming=True, name='reviewer_llm')\
         .bind_tools(tools, tool_choice='required')
     
     chain = prompt | llm
@@ -280,14 +273,15 @@ Provide your review feedback using the ReviewFeedback tool.""")])
     )
     
     try:
-        next = 'FINISH' if state['improved'] >= 2 else message.tool_calls[0]['args']['next']
+        next = 'FINISH' if state['improved'] >= 1 else message.tool_calls[0]['args']['next']
     except:
         next = message.tool_calls[0]['args']['next']
     
     return {
         'messages': state['messages'] + [review_message],
         'research': state.get('research', []),
-        'report': state['report'],
+        'token_report': state['token_report'],
+        'alpha': state['alpha'],
         'review_feedback': review_message.content,
         'improved': state['improved'] + 1,
         'next': next,
@@ -305,16 +299,16 @@ graph = StateGraph(GraphState)
 
 graph.add_node('researcher', research_agent)
 graph.add_node('research_tools', research_tools_node)
-graph.add_node('report_writer', generate_report)
+graph.add_node('alpha_writer', generate_alpha)
 graph.add_node('reviewer', reviewer)
 graph.add_edge(START, 'researcher')
 graph.add_conditional_edges(
     'researcher', lambda x: x['next'], {
         'research': 'research_tools',
-        'GenerateReport': 'report_writer',
+        'GenerateAlpha': 'alpha_writer',
     })
 graph.add_edge('research_tools', 'researcher')
-graph.add_edge('report_writer', 'reviewer')
+graph.add_edge('alpha_writer', 'reviewer')
 graph.add_conditional_edges(
     'reviewer', lambda x: x['next'], {
         'research': 'researcher',
@@ -326,24 +320,28 @@ agent_graph.name = "Multi-Agent Alpha Scout"
 
 
 # As Chain
-get_state = lambda x: GraphState(
-    messages=x['messages'],
-    research=None,
-    improved=False,
-    report=None,
-    review_feedback=None,
-    next='',
-    quick_search_count=0,
-    deep_search_count=0,
-    get_token_data_count=0
-)
-get_report = lambda x: x['report']
-get_messages = lambda x: [HumanMessage(content=msg) for msg in x['messages']]
-get_improved = lambda x: False
+def get_state(input_data):
+    messages = [HumanMessage(content=msg) for msg in input_data.get('messages', [])]
+    token_report = input_data.get('token_report')
+    
+    return GraphState(
+        messages=messages,
+        research=None,
+        token_report=token_report,
+        alpha=None,
+        review_feedback=None,
+        next='',
+        quick_search_count=0,
+        deep_search_count=0,
+        get_token_data_count=0,
+        improved=0
+    )
+
+get_alpha = lambda x: x['alpha']
 
 multi_agent_alpha_scout = (
-    RunnablePassthrough.assign(messages=get_messages)
+    RunnablePassthrough.assign(token_report=lambda x: x.get('token_report'))
     | get_state 
     | agent_graph
-    | get_report
+    | get_alpha
 ).with_config({"run_name": "Multi-Agent Alpha Scout"})

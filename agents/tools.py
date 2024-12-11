@@ -3,7 +3,7 @@ from typing import List, Dict, Optional, Union, Annotated
 from pydantic import BaseModel, Field
 import requests
 
-from agents.models import TokenData
+from agents.models import TokenData, TransactionData
 from chains.tavily_chain import retriever as long_retriever, short_retriever
 
 # Tools
@@ -21,6 +21,25 @@ def deep_search(query: str) -> List[dict]:
     return [doc.dict() for doc in docs]
 
 
+def extract_token_transaction_data(attributes: dict) -> Optional[TransactionData]:
+    """Extract transaction data from token attributes"""
+    if not attributes:
+        return None
+        
+    price_changes = attributes.get('price_change_percentage', {})
+    return TransactionData(
+        fdv_usd=float(attributes.get('fdv_usd', 0)),
+        market_cap_usd=attributes.get('market_cap_usd'),
+        price_change_5m=float(price_changes.get('m5', 0)),
+        price_change_1h=float(price_changes.get('h1', 0)),
+        price_change_6h=float(price_changes.get('h6', 0)),
+        price_change_24h=float(price_changes.get('h24', 0)),
+        transactions_1h=attributes.get('transactions', {}).get('h1'),
+        transactions_24h=attributes.get('transactions', {}).get('h24'),
+        volume_1h=float(attributes.get('volume_usd', {}).get('h1', 0)),
+        volume_24h=float(attributes.get('volume_usd', {}).get('h24', 0)),
+        reserve_in_usd=float(attributes.get('reserve_in_usd', 0))
+    )
 
 def extract_token_data(token_symbol: str, pool_data: dict) -> Optional[TokenData]:
     if not pool_data.get('data'):
@@ -35,13 +54,16 @@ def extract_token_data(token_symbol: str, pool_data: dict) -> Optional[TokenData
     symbol = pool_name.split('/')[0].strip()
     if token_symbol.lower() not in [symbol.lower(), address.lower()]:
         return None
+        
+    transaction_data = extract_token_transaction_data(attributes)
     
     return TokenData(
         chain=chain,
         address=address,
         name='',
         symbol=symbol,
-        attributes=attributes
+        attributes=attributes,
+        transaction_data=transaction_data
     )
 
 
@@ -68,7 +90,8 @@ def get_token_data(
     Use this tool when you have a token symbol or address to search for.
     """
     pool_data = search_tokens(token)
-    return extract_token_data(token, pool_data)
+    token_data = extract_token_data(token, pool_data)
+    return token_data.dict()
 
 
 class IsTokenReport(BaseModel):
@@ -84,7 +107,7 @@ class IsTokenReport(BaseModel):
 
 
 # Agent as Tool
-class GenerateReport(BaseModel):
+class GenerateAlpha(BaseModel):
     """Generate a report analyzing potential token opportunities based on the research. 
-Use this when you have sufficient research to report on token opportunities or have determined that the messages are not relevant to token opportunities or have reached search limits."""
-    messages: List[str] = Field(description="The original Warpcast messages to analyze")
+Use this when you have sufficient research to report on token opportunities or have reached search limits."""
+    token: str = Field(description="The token symbol to analyze")
