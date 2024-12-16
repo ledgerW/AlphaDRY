@@ -19,9 +19,3 @@
     pkgs.postgresql
   ];
 }
-{pkgs}: {
-  deps = [
-    pkgs.python311
-    pkgs.postgresql
-  ];
-}
