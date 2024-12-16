@@ -37,3 +37,10 @@ tenacity>=9.0.0
 tiktoken>=0.8.0
 uvicorn>=0.25.0
 wikipedia>=1.4.0
+agents
+farcaster
+langchain-core
+langchain-huggingface
+python-dateutil
+pyyaml
+typing-extensions
