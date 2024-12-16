@@ -6,6 +6,7 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from sqlalchemy.orm import joinedload
+from datetime import datetime
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -16,9 +17,14 @@ from langchain_openai import ChatOpenAI
 from chains.seek_alpha_chain import base_seek_alpha, multi_hop_seek_alpha
 from chains.alpha_chain import Alpha
 from agents.multi_agent_alpha_scout import multi_agent_alpha_scout
+from agents.multi_agent_token_finder import crypto_text_classifier
 from agents.models import TokenAlpha, Chain
 from agents.tools import IsTokenReport
-from database import create_alpha_report, get_all_alpha_reports, TokenOpportunityDB, AlphaReportDB, get_session
+from database import (
+    create_alpha_report, get_all_alpha_reports, TokenOpportunityDB, 
+    AlphaReportDB, get_session, create_social_media_post,
+    create_token_report
+)
 
 load_dotenv()
 
@@ -38,6 +44,16 @@ class Token(BaseModel):
 
     def __str__(self):
         return f"Token(name={self.name}, symbol={self.symbol}, chain={self.chain})"
+
+class SocialMediaInput(BaseModel):
+    """Input model for social media text analysis"""
+    text: str = Field(..., description="The social media post text to analyze")
+    source: str = Field(default="unknown", description="Source platform of the post")
+    author_id: str = Field(default="unknown", description="Author's ID in the source platform")
+    author_username: str = Field(default="unknown", description="Author's username")
+    author_display_name: str = Field(default=None, description="Author's display name")
+    post_id: str = Field(default=None, description="Original post ID from the source")
+    original_timestamp: datetime = Field(default=None, description="Original post date/time from the source platform")
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -137,3 +153,63 @@ async def get_multi_agent_alpha_scout(token_report: IsTokenReport):
     return token_alpha
     #except Exception as e:
     #    raise HTTPException(status_code=500, detail=str(e))
+
+@router.post(
+    "/analyze_social_post",
+    dependencies=[Depends(api_key_auth)],
+    response_model=IsTokenReport
+)
+async def analyze_social_post(input_data: SocialMediaInput):
+    """Analyze social media post text for token mentions and create a token report."""
+    try:
+        # Convert input data to dict and handle datetime serialization
+        raw_data = input_data.dict()
+        if raw_data.get('original_timestamp'):
+            raw_data['original_timestamp'] = raw_data['original_timestamp'].isoformat()
+
+        # Create social media post entry
+        post_data = {
+            "source": input_data.source,
+            "post_id": input_data.post_id or f"generated_{int(datetime.utcnow().timestamp())}",
+            "author_id": input_data.author_id,
+            "author_username": input_data.author_username,
+            "author_display_name": input_data.author_display_name,
+            "text": input_data.text,
+            "original_timestamp": input_data.original_timestamp or datetime.utcnow(),  # Use current time if not provided
+            "timestamp": datetime.utcnow(),  # When we process the post
+            "reactions_count": 0,
+            "replies_count": 0,
+            "reposts_count": 0,
+            "raw_data": raw_data  # Use the serialized version
+        }
+        
+        social_post = create_social_media_post(post_data)
+        if not social_post:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to save social media post to database"
+            )
+
+        # Analyze text using token finder agent
+        token_report = await crypto_text_classifier.ainvoke({
+            'messages': [input_data.text]
+        })
+
+        if not token_report:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to analyze text with token finder agent"
+            )
+
+        # Save token report to database
+        db_token_report = create_token_report(token_report, social_post.id)
+        if not db_token_report:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to save token report to database"
+            )
+
+        return token_report
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
