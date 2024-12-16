@@ -14,7 +14,7 @@ app = FastAPI()
 # Create database tables on startup
 @app.on_event("startup")
 async def startup_event():
-    create_db_and_tables()
+    create_db_and_tables(force_reset=False)
 
 # Mount the API router
 app.include_router(api.router)

@@ -150,8 +150,11 @@ def create_db_and_tables(force_reset: bool = False):
         reset_db()
     elif not tables_exist():
         engine = get_engine()
-        SQLModel.metadata.create_all(engine)
-        populate_dev_data()
+        try:
+            SQLModel.metadata.create_all(engine)
+            populate_dev_data()
+        except Exception as e:
+            print(f"Warning: Some tables already exist - {str(e)}")
 
 if __name__ == "__main__":
     create_db_and_tables()
