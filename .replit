@@ -1,3 +1,4 @@
+
 modules = ["python-3.11", "postgresql-16"]
 
 [nix]
@@ -29,7 +30,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python -c 'from database import create_db_and_tables; create_db_and_tables(force_reset=True)' && PGPASSWORD=$DATABASE_PASSWORD psql $DATABASE_URL -f db/trigger_functions.sql"
+args = "PGPASSWORD=$DATABASE_PASSWORD psql $DATABASE_URL -f db/trigger_functions.sql && python -c 'from database import create_db_and_tables; create_db_and_tables(force_reset=True)'"
 
 [[workflows.workflow]]
 name = "FastAPI Server"
@@ -52,7 +53,7 @@ task = "shell.exec"
 args = "python db/listener_service.py"
 
 [deployment]
-run = ["sh", "-c", "python -c 'from database import create_db_and_tables; create_db_and_tables()' && PGPASSWORD=$DATABASE_PASSWORD psql $DATABASE_URL -f db/trigger_functions.sql && (python db/listener_service.py & uvicorn main:app --host 0.0.0.0 --port 8000)"]
+run = ["sh", "-c", "PGPASSWORD=$DATABASE_PASSWORD psql $DATABASE_URL -f db/trigger_functions.sql && python -c 'from database import create_db_and_tables; create_db_and_tables()' && (python db/listener_service.py & uvicorn main:app --host 0.0.0.0 --port 8000)"]
 build = ["sh", "-c", "echo \"no build\""]
 deploymentTarget = "cloudrun"
 
