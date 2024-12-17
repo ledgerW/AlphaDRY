@@ -213,3 +213,45 @@ async def analyze_social_post(input_data: SocialMediaInput):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post(
+    "/analyze_and_scout",
+    dependencies=[Depends(api_key_auth)],
+    response_model=TokenAlpha | None
+)
+async def analyze_and_scout(input_data: SocialMediaInput):
+    """Analyze social media post and scout for token opportunities in one step."""
+    try:
+        # First analyze the social post
+        token_report = await analyze_social_post(input_data)
+        
+        # Only run alpha scout if a purchasable token was found
+        if token_report['mentions_purchasable_token']:
+            # Pass the token report to the alpha scout agent
+            token_alpha = await multi_agent_alpha_scout.ainvoke({
+                'messages': [token_report['reasoning']],
+                'token_report': token_report
+            })
+            
+            # Create report in database
+            report_data = {
+                "is_relevant": token_report['mentions_purchasable_token'],
+                "analysis": token_report['reasoning'],
+                "message": token_report['reasoning'],
+                "opportunities": [token_alpha]
+            }
+            
+            db_report = create_alpha_report(report_data)
+            if not db_report:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to save report to database"
+                )
+            
+            return token_alpha
+        
+        # If no purchasable token found, return None
+        return None
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
