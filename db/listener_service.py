@@ -31,7 +31,7 @@ def notify_alpha_scout(payload):
     }
     
     # Get the base URL from environment or use default
-    base_url = os.getenv('API_BASE_URL', 'http://localhost:8000')
+    base_url = os.getenv('API_BASE_URL', 'http://0.0.0.0:8000')
     url = f"{base_url}/api/multi_agent_alpha_scout"
     
     print(f"Sending request to {url} with payload: {payload}")
