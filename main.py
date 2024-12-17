@@ -11,10 +11,12 @@ load_dotenv()
 
 app = FastAPI()
 
+
 # Create database tables on startup
 @app.on_event("startup")
 async def startup_event():
     create_db_and_tables(force_reset=False)
+
 
 # Mount the API router
 app.include_router(api.router)
@@ -25,6 +27,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Configure templates
 templates = Jinja2Templates(directory=".")
 
+
 @app.get("/")
 async def read_index(request: Request):
     return templates.TemplateResponse("index.html", {
@@ -32,7 +35,8 @@ async def read_index(request: Request):
         "api_key": os.getenv("API_KEY", "")
     })
 
+
 if __name__ == "__main__":
     # Use port 80 for deployment or 2024 as fallback
-    port = int(os.getenv("PORT", 80))
+    port = int(os.getenv("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

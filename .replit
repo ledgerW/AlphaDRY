@@ -52,10 +52,14 @@ task = "shell.exec"
 args = "python db/listener_service.py"
 
 [deployment]
-run = ["sh", "-c", "pip install -r requirements.txt && PGPASSWORD=$DATABASE_PASSWORD psql $DATABASE_URL -f db/deployment_safety.sql && python -c 'from database import create_db_and_tables; create_db_and_tables()' && (python db/listener_service.py & uvicorn main:app --host 0.0.0.0 --port 80)"]
+run = [
+  "sh",
+  "-c",
+  "pip install -r requirements.txt && PGPASSWORD=$DATABASE_PASSWORD psql $DATABASE_URL -f db/deployment_safety.sql && python -c 'from database import create_db_and_tables; create_db_and_tables()' && (python db/listener_service.py & uvicorn main:app --host 0.0.0.0 --port 8000)",
+]
 build = ["sh", "-c", "pip install -r requirements.txt"]
 deploymentTarget = "cloudrun"
 
 [[ports]]
-localPort = 80
-externalPort = 80
+localPort = 8000
+externalPort = 8000
