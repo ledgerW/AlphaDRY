@@ -37,9 +37,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger to execute function after insert
+-- Drop existing triggers if they exist
 DROP TRIGGER IF EXISTS token_report_created ON dev_token_reports;
+DROP TRIGGER IF EXISTS token_report_created ON prod_token_reports;
+
+-- Create trigger for development environment
 CREATE TRIGGER token_report_created
     AFTER INSERT ON dev_token_reports
+    FOR EACH ROW
+    EXECUTE FUNCTION notify_alpha_scout();
+
+-- Create trigger for production environment
+CREATE TRIGGER token_report_created
+    AFTER INSERT ON prod_token_reports
     FOR EACH ROW
     EXECUTE FUNCTION notify_alpha_scout();
