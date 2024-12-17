@@ -4,6 +4,9 @@ RETURNS TRIGGER AS $$
 DECLARE
     payload json;
 BEGIN
+    -- Debug logging
+    RAISE NOTICE 'Trigger fired for token report. mentions_purchasable_token: %', NEW.mentions_purchasable_token;
+    
     -- Only proceed if mentions_purchasable_token is true
     IF NEW.mentions_purchasable_token = true THEN
         -- Create payload matching IsTokenReport format
@@ -18,8 +21,16 @@ BEGIN
             'reasoning', NEW.reasoning
         );
 
+        -- Debug logging
+        RAISE NOTICE 'Sending notification with payload: %', payload::text;
+
         -- Notify through Postgres NOTIFY
         PERFORM pg_notify('token_report_created', payload::text);
+        
+        -- Debug logging
+        RAISE NOTICE 'Notification sent successfully';
+    ELSE
+        RAISE NOTICE 'Skipping notification as mentions_purchasable_token is false';
     END IF;
 
     RETURN NEW;

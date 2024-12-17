@@ -34,16 +34,24 @@ def notify_alpha_scout(payload):
     base_url = os.getenv('API_BASE_URL', 'http://localhost:8000')
     url = f"{base_url}/api/multi_agent_alpha_scout"
     
+    print(f"Sending request to {url} with payload: {payload}")
+    
     try:
         response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status()
         print(f"Successfully notified alpha scout for token {payload.get('token_symbol')}")
+        print(f"Response status: {response.status_code}")
+        print(f"Response body: {response.text}")
     except requests.exceptions.RequestException as e:
         print(f"Error notifying alpha scout: {str(e)}")
+        if hasattr(e.response, 'text'):
+            print(f"Error response: {e.response.text}")
 
 def main():
     """Main listener function"""
     database_url = get_database_url()
+    
+    print(f"Connecting to database...")
     
     # Connect to database
     conn = psycopg2.connect(database_url)
@@ -54,6 +62,9 @@ def main():
     cur.execute("LISTEN token_report_created;")
     
     print("Listening for token report notifications...")
+    print("Debug: Using DATABASE_URL:", os.getenv("DATABASE_URL", "not set"))
+    print("Debug: Using API_KEY:", "..." + os.getenv("API_KEY", "not set")[-4:] if os.getenv("API_KEY") else "not set")
+    print("Debug: Using API_BASE_URL:", os.getenv("API_BASE_URL", "http://localhost:8000"))
     
     while True:
         if select.select([conn], [], [], 5) == ([], [], []):
@@ -64,16 +75,22 @@ def main():
         while conn.notifies:
             notify = conn.notifies.pop(0)
             try:
+                print(f"Debug: Received raw notification: {notify.payload}")
+                
                 # Parse notification payload
                 payload = json.loads(notify.payload)
+                print(f"Debug: Parsed payload: {json.dumps(payload, indent=2)}")
                 print(f"Received notification for token {payload.get('token_symbol')}")
                 
                 # Forward to alpha scout
                 notify_alpha_scout(payload)
             except json.JSONDecodeError as e:
                 print(f"Error decoding notification payload: {str(e)}")
+                print(f"Raw payload was: {notify.payload}")
             except Exception as e:
                 print(f"Error processing notification: {str(e)}")
+                import traceback
+                print(traceback.format_exc())
 
 if __name__ == "__main__":
     try:
@@ -82,3 +99,5 @@ if __name__ == "__main__":
         print("\nShutting down listener service...")
     except Exception as e:
         print(f"Fatal error: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
