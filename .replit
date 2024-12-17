@@ -57,10 +57,5 @@ build = ["sh", "-c", "pip install -r requirements.txt"]
 deploymentTarget = "cloudrun"
 
 [[ports]]
-localPort = 2024
-externalPort = 3000
-exposeLocalhost = true
-
-[[ports]]
-localPort = 8000
+localPort = 80
 externalPort = 80
