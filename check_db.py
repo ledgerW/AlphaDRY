@@ -47,5 +47,64 @@ def check_triggers():
         cur.close()
         conn.close()
 
+def update_token_opportunities_table():
+    """Add chain column to prod_token_opportunities table"""
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    cur = conn.cursor()
+    
+    try:
+        # First check if the chain type exists
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT 1 
+                FROM pg_type 
+                WHERE typname = 'chain'
+            );
+        """)
+        chain_type_exists = cur.fetchone()[0]
+        
+        if not chain_type_exists:
+            print("Creating chain enum type...")
+            cur.execute("""
+                CREATE TYPE chain AS ENUM ('BASE', 'SOLANA');
+            """)
+            print("Chain enum type created successfully")
+        
+        # Check if chain column exists
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT 1 
+                FROM information_schema.columns 
+                WHERE table_name = 'prod_token_opportunities' 
+                AND column_name = 'chain'
+            );
+        """)
+        chain_column_exists = cur.fetchone()[0]
+        
+        if not chain_column_exists:
+            print("Adding chain column to prod_token_opportunities...")
+            # Add the chain column
+            cur.execute("""
+                ALTER TABLE prod_token_opportunities 
+                ADD COLUMN chain chain NOT NULL DEFAULT 'BASE';
+            """)
+            print("Chain column added successfully")
+        else:
+            print("Chain column already exists")
+        
+        conn.commit()
+        print("Database update completed successfully")
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Error updating database: {str(e)}")
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
 if __name__ == "__main__":
+    print("Updating token opportunities table...")
+    update_token_opportunities_table()
+    print("\nChecking triggers...")
     check_triggers()
