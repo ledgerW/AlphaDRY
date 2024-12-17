@@ -29,7 +29,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PGPASSWORD=$DATABASE_PASSWORD psql $DATABASE_URL -f db/trigger_functions.sql && python -c 'from database import create_db_and_tables; create_db_and_tables(force_reset=True)'"
+args = "python -c 'from database import create_db_and_tables; create_db_and_tables(force_reset=True)' && PGPASSWORD=$DATABASE_PASSWORD psql $DATABASE_URL -f db/trigger_functions.sql"
 
 [[workflows.workflow]]
 name = "FastAPI Server"
