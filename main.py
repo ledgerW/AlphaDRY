@@ -9,7 +9,7 @@ from database import create_db_and_tables
 
 load_dotenv()
 
-app = FastAPI()
+app = FastAPI(name="AlphaDRY")
 
 
 # Create database tables on startup

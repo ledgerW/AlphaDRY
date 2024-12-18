@@ -8,6 +8,8 @@ from typing_extensions import TypedDict
 class Chain(str, Enum):
     BASE = 'Base'
     SOLANA = 'Solana'
+    DEGEN = 'Degen'
+    ETHEREUM = 'Ethereum'
 
 
 class TokenAlpha(BaseModel):
