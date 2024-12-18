@@ -238,7 +238,8 @@ async def analyze_and_scout(input_data: SocialMediaInput):
                 "is_relevant": token_report['mentions_purchasable_token'],
                 "analysis": token_report['reasoning'],
                 "message": token_report['reasoning'],
-                "opportunities": [token_alpha]
+                "opportunities": [token_alpha],
+                "token_report_id": token_report['id']  # Add token report ID to link the opportunity
             }
             
             db_report = create_alpha_report(report_data)

@@ -35,6 +35,7 @@ def create_alpha_report(report_data: Dict[str, Any]) -> Optional[AlphaReportDB]:
                         
                     opportunity = TokenOpportunityDB(
                         report_id=report.id,
+                        token_report_id=report_data.get("token_report_id"),  # Add token report ID
                         **opp_data
                     )
                     session.add(opportunity)
