@@ -25,7 +25,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python -c 'from database import create_db_and_tables; create_db_and_tables(force_reset=True)'"
+# Only force reset in development environment
+args = """python -c '
+import os
+from database import create_db_and_tables
+if os.getenv("REPLIT_DEPLOYMENT") != "1":
+    create_db_and_tables(force_reset=True)
+else:
+    create_db_and_tables(force_reset=False)
+'"""
 
 [[workflows.workflow]]
 name = "FastAPI Server"
@@ -43,7 +51,24 @@ waitForPort = 8000
 run = [
   "sh",
   "-c",
-  "pip install -r requirements.txt && PGPASSWORD=$DATABASE_PASSWORD psql $DATABASE_URL -f db/deployment_safety.sql && python -c 'from database import create_db_and_tables; create_db_and_tables()' && uvicorn main:app --host 0.0.0.0 --port 8000",
+  # Create backup first, then run deployment safety SQL, then initialize without force reset
+  """
+  pip install -r requirements.txt && \
+  if [ "$REPLIT_DEPLOYMENT" = "1" ]; then
+    # Production deployment steps
+    backup_file="backup_$(date +%Y%m%d_%H%M%S).sql"
+    echo "Creating backup: $backup_file" && \
+    PGPASSWORD=$DATABASE_PASSWORD pg_dump $DATABASE_URL > $backup_file && \
+    echo "Running deployment safety SQL..." && \
+    PGPASSWORD=$DATABASE_PASSWORD psql $DATABASE_URL -f db/deployment_safety.sql && \
+    echo "Initializing database..." && \
+    python -c 'from database import create_db_and_tables; create_db_and_tables(force_reset=False)'
+  else
+    # Development deployment - can reset
+    python -c 'from database import create_db_and_tables; create_db_and_tables(force_reset=True)'
+  fi && \
+  uvicorn main:app --host 0.0.0.0 --port 8000
+  """
 ]
 build = ["sh", "-c", "pip install -r requirements.txt"]
 deploymentTarget = "cloudrun"
