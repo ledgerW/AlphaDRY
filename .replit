@@ -3,6 +3,9 @@ modules = ["python-3.11", "postgresql-16"]
 [nix]
 channel = "stable-24_05"
 
+[env]
+REPLIT_DISABLE_PACKAGE_LAYER = "1"
+
 [workflows]
 runButton = "Project"
 
@@ -44,37 +47,27 @@ agentRequireRestartOnSave = false
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
-waitForPort = 8000
+args = "uvicorn main:app --host 0.0.0.0 --port 80 --reload"
+waitForPort = 80
 
 [deployment]
-run = [
-  "sh",
-  "-c",
-  """
-  pip install -r requirements.txt && \
-  if [ "$REPLIT_DEPLOYMENT" = "1" ]; then
-    # Production deployment steps
-    echo "Creating database backup..." && \
-    backup_file="backup_$(date +%Y%m%d_%H%M%S).sql" && \
-    PGPASSWORD=$DATABASE_PASSWORD pg_dump $DATABASE_URL > $backup_file && \
-    echo "Backup created: $backup_file" && \
-    
-    # Run Alembic migrations in production (non-destructive)
-    echo "Running database migrations..." && \
-    alembic upgrade head && \
-    echo "Migrations complete."
-  else
-    # Development deployment - can reset and run migrations
-    python -c 'from database import reset_db; reset_db()' && \
-    alembic upgrade head
-  fi && \
-  uvicorn main:app --host 0.0.0.0 --port 8000
-  """
-]
+run = ["sh", "-c", """
+if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
+    # Production: Install deps, run migrations (preserves prod_ tables)
+    pip install -r requirements.txt &&
+    alembic upgrade head &&
+    uvicorn main:app --host 0.0.0.0 --port $PORT
+else
+    # Development: Install deps, reset dev_ tables, run migrations
+    pip install -r requirements.txt &&
+    python -c 'from database import reset_db; reset_db()' &&
+    alembic upgrade head &&
+    uvicorn main:app --host 0.0.0.0 --port $PORT
+fi
+"""]
 build = ["sh", "-c", "pip install -r requirements.txt"]
 deploymentTarget = "cloudrun"
 
 [[ports]]
-localPort = 8000
-externalPort = 8000
+localPort = 80
+externalPort = 80
