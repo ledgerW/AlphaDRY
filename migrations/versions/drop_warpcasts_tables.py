@@ -1,4 +1,3 @@
-
 """drop warpcasts tables
 
 Revision ID: drop_warpcasts_tables
@@ -7,8 +6,11 @@ Create Date: 2024-12-19
 from alembic import op
 import sqlalchemy as sa
 
-# Add revision ID
+# revision identifiers, used by Alembic
 revision = 'drop_warpcasts_tables'
+down_revision = '0507e8573ab9'  # Points to the previous migration
+branch_labels = None
+depends_on = None
 
 def upgrade():
     # First create the warpcasts table to ensure it exists
