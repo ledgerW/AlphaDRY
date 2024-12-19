@@ -1,4 +1,3 @@
-
 arxiv>=2.1.3
 asyncpg>=0.30.0
 bcrypt>=4.2.0
@@ -23,7 +22,8 @@ sqlmodel>=0.0.22
 tavily-python>=0.5.0
 tiktoken>=0.8.0
 uvicorn>=0.25.0
-typing-extensions
+alembic>=1.0.0 # Database migrations
 python-dateutil
 pyyaml
 requests
+typing-extensions
