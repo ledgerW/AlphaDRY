@@ -51,21 +51,23 @@ waitForPort = 8000
 run = [
   "sh",
   "-c",
-  # Create backup first, then run deployment safety SQL, then initialize without force reset
   """
   pip install -r requirements.txt && \
   if [ "$REPLIT_DEPLOYMENT" = "1" ]; then
     # Production deployment steps
-    backup_file="backup_$(date +%Y%m%d_%H%M%S).sql"
-    echo "Creating backup: $backup_file" && \
+    echo "Creating database backup..." && \
+    backup_file="backup_$(date +%Y%m%d_%H%M%S).sql" && \
     PGPASSWORD=$DATABASE_PASSWORD pg_dump $DATABASE_URL > $backup_file && \
-    echo "Running deployment safety SQL..." && \
-    PGPASSWORD=$DATABASE_PASSWORD psql $DATABASE_URL -f db/deployment_safety.sql && \
-    echo "Initializing database..." && \
-    python -c 'from database import create_db_and_tables; create_db_and_tables(force_reset=False)'
+    echo "Backup created: $backup_file" && \
+    
+    # Run Alembic migrations in production (non-destructive)
+    echo "Running database migrations..." && \
+    alembic upgrade head && \
+    echo "Migrations complete."
   else
-    # Development deployment - can reset
-    python -c 'from database import create_db_and_tables; create_db_and_tables(force_reset=True)'
+    # Development deployment - can reset and run migrations
+    python -c 'from database import reset_db; reset_db()' && \
+    alembic upgrade head
   fi && \
   uvicorn main:app --host 0.0.0.0 --port 8000
   """
