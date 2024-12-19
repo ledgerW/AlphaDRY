@@ -6,16 +6,18 @@ from typing_extensions import TypedDict
 
 # Models
 class Chain(str, Enum):
-    BASE = 'Base'
-    SOLANA = 'Solana'
-    DEGEN = 'Degen'
-    ETHEREUM = 'Ethereum'
+    ETHEREUM = 'ethereum'
+    POLYGON = 'polygon'
+    ARBITRUM = 'arbitrum'
+    OPTIMISM = 'optimism'
+    BASE = 'base'
+    SOLANA = 'solana'
 
 
 class TokenAlpha(BaseModel):
     """Details about a potential token investment opportunity"""
     name: str = Field(description="Name of the token")
-    chain: Chain = Field(description="The blockchain the token is on (Base or Solana)")
+    chain: Chain = Field(description="The blockchain the token is on")
     contract_address: Optional[str] = Field(description="Contract address of the token if available")
     market_cap: Optional[float] = Field(description="fdv_usd value in Token Data, if available, or market cap in USD")
     community_score: int = Field(description="Score from 1-10 rating the strength and reputation of the community")

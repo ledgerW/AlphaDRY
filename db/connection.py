@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine, inspect, text
 from dotenv import load_dotenv
 import os
+from urllib.parse import urlparse, parse_qs, urlencode
 
 load_dotenv()
 
@@ -30,6 +31,22 @@ def get_engine():
         DATABASE_URL = os.getenv("DATABASE_URL")
         if not DATABASE_URL:
             raise ValueError("DATABASE_URL environment variable is required")
+            
+        # Parse the URL to add application_name parameter
+        parsed = urlparse(DATABASE_URL)
+        query_params = parse_qs(parsed.query or '')
+        
+        # Set application_name based on environment
+        query_params['application_name'] = ['prod' if new_prefix == 'prod_' else 'dev']
+        
+        # Reconstruct the URL with the new parameter
+        new_query = urlencode(query_params, doseq=True)
+        
+        # Handle URLs with and without existing query parameters
+        if parsed.query:
+            DATABASE_URL = DATABASE_URL.replace(parsed.query, new_query)
+        else:
+            DATABASE_URL = f"{DATABASE_URL}?{new_query}"
             
         _engine = create_engine(
             DATABASE_URL,

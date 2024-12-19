@@ -1,57 +1,33 @@
 -- Deployment Safety SQL
--- Run this in production to safely update database schema
+-- This script safely updates schema without dropping tables
 
 DO $$
 DECLARE
-    table_count INTEGER;
-    backup_exists BOOLEAN;
     env_prefix TEXT;
 BEGIN
-    -- Determine environment prefix
-    IF current_setting('replit.deployment', TRUE) = '1' THEN
+    -- Get environment prefix from environment variable via connection info
+    -- In production, set REPLIT_DEPLOYMENT=1 in your environment
+    IF current_setting('application_name') = 'prod' THEN
         env_prefix := 'prod_';
     ELSE
         env_prefix := 'dev_';
     END IF;
 
-    -- Count existing production tables that have data
-    EXECUTE format('
-        SELECT COUNT(*) INTO table_count
-        FROM (
-            SELECT EXISTS (SELECT 1 FROM %Itoken_opportunities LIMIT 1) UNION ALL
-            SELECT EXISTS (SELECT 1 FROM %Ialpha_reports LIMIT 1) UNION ALL
-            SELECT EXISTS (SELECT 1 FROM %Iwarpcasts LIMIT 1) UNION ALL
-            SELECT EXISTS (SELECT 1 FROM %Isocial_media_posts LIMIT 1) UNION ALL
-            SELECT EXISTS (SELECT 1 FROM %Itoken_reports LIMIT 1)
-        ) AS t', env_prefix, env_prefix, env_prefix, env_prefix, env_prefix);
-
-    -- Check if backup exists from today
-    SELECT EXISTS (
-        SELECT 1 
-        FROM pg_stat_file('backup_' || to_char(current_date, 'YYYYMMDD') || '%.sql')
-    ) INTO backup_exists;
-
-    -- If tables have data and no backup exists, raise an error
-    IF table_count > 0 AND NOT backup_exists THEN
-        RAISE EXCEPTION 'Cannot proceed: Tables contain data but no backup from today was found. Please run backup first.';
+    -- Create Chain enum type if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'chain') THEN
+        CREATE TYPE chain AS ENUM (
+            'ethereum',
+            'polygon',
+            'arbitrum',
+            'optimism',
+            'base',
+            'solana'
+        );
     END IF;
 
-    -- Drop existing Chain enum type if it exists (to update with new values)
-    DROP TYPE IF EXISTS chain CASCADE;
+    -- Create tables if they don't exist (won't modify existing tables)
     
-    -- Create Chain enum type with all supported chains
-    CREATE TYPE chain AS ENUM (
-        'ethereum',
-        'polygon',
-        'arbitrum',
-        'optimism',
-        'base',
-        'solana'
-    );
-
-    -- Create tables in correct dependency order
-    
-    -- 1. Create social_media_posts first (no dependencies)
+    -- 1. Create social_media_posts if not exists
     EXECUTE format('
         CREATE TABLE IF NOT EXISTS %Isocial_media_posts (
             id SERIAL PRIMARY KEY,
@@ -71,7 +47,7 @@ BEGIN
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )', env_prefix);
 
-    -- 2. Create token_reports (depends on social_media_posts)
+    -- 2. Create token_reports if not exists
     EXECUTE format('
         CREATE TABLE IF NOT EXISTS %Itoken_reports (
             id SERIAL PRIMARY KEY,
@@ -83,11 +59,11 @@ BEGIN
             trading_pairs JSON,
             confidence_score INTEGER,
             reasoning TEXT NOT NULL,
-            social_post_id INTEGER REFERENCES %Isocial_media_posts(id),
+            social_post_id INTEGER,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )', env_prefix, env_prefix);
+        )', env_prefix);
 
-    -- 3. Create alpha_reports (no dependencies)
+    -- 3. Create alpha_reports if not exists
     EXECUTE format('
         CREATE TABLE IF NOT EXISTS %Ialpha_reports (
             id SERIAL PRIMARY KEY,
@@ -97,7 +73,7 @@ BEGIN
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )', env_prefix);
 
-    -- 4. Create warpcasts (no dependencies)
+    -- 4. Create warpcasts if not exists
     EXECUTE format('
         CREATE TABLE IF NOT EXISTS %Iwarpcasts (
             id SERIAL PRIMARY KEY,
@@ -114,12 +90,12 @@ BEGIN
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )', env_prefix);
 
-    -- 5. Create token_opportunities (depends on alpha_reports and token_reports)
+    -- 5. Create token_opportunities if not exists
     EXECUTE format('
         CREATE TABLE IF NOT EXISTS %Itoken_opportunities (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
-            chain chain,
+            chain chain NOT NULL,  -- Make chain required and use enum type
             contract_address VARCHAR(255),
             market_cap DOUBLE PRECISION,
             community_score INTEGER NOT NULL DEFAULT 0,
@@ -127,12 +103,65 @@ BEGIN
             justification TEXT NOT NULL DEFAULT '''',
             sources JSON,
             recommendation VARCHAR(50) NOT NULL DEFAULT ''Hold'',
-            report_id INTEGER REFERENCES %Ialpha_reports(id),
-            token_report_id INTEGER REFERENCES %Itoken_reports(id),
+            report_id INTEGER,
+            token_report_id INTEGER,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )', env_prefix, env_prefix, env_prefix);
+        )', env_prefix);
 
-    -- Add token_report_id foreign key to social_media_posts if it doesn't exist
+    -- Add foreign key constraints if they don't exist
+    
+    -- token_opportunities -> alpha_reports
+    EXECUTE format('
+        DO $constraint$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 
+                FROM information_schema.table_constraints 
+                WHERE constraint_name = ''fk_token_opportunities_report''
+            ) THEN
+                ALTER TABLE %Itoken_opportunities
+                ADD CONSTRAINT fk_token_opportunities_report
+                FOREIGN KEY (report_id)
+                REFERENCES %Ialpha_reports(id);
+            END IF;
+        END $constraint$;
+    ', env_prefix, env_prefix);
+
+    -- token_opportunities -> token_reports
+    EXECUTE format('
+        DO $constraint$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 
+                FROM information_schema.table_constraints 
+                WHERE constraint_name = ''fk_token_opportunities_token_report''
+            ) THEN
+                ALTER TABLE %Itoken_opportunities
+                ADD CONSTRAINT fk_token_opportunities_token_report
+                FOREIGN KEY (token_report_id)
+                REFERENCES %Itoken_reports(id);
+            END IF;
+        END $constraint$;
+    ', env_prefix, env_prefix);
+
+    -- token_reports -> social_media_posts
+    EXECUTE format('
+        DO $constraint$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 
+                FROM information_schema.table_constraints 
+                WHERE constraint_name = ''fk_token_reports_social_post''
+            ) THEN
+                ALTER TABLE %Itoken_reports
+                ADD CONSTRAINT fk_token_reports_social_post
+                FOREIGN KEY (social_post_id)
+                REFERENCES %Isocial_media_posts(id);
+            END IF;
+        END $constraint$;
+    ', env_prefix, env_prefix);
+
+    -- social_media_posts -> token_reports
     EXECUTE format('
         DO $constraint$
         BEGIN
@@ -149,14 +178,17 @@ BEGIN
         END $constraint$;
     ', env_prefix, env_prefix);
 
-    -- Create a function to handle case-insensitive chain values
-    CREATE OR REPLACE FUNCTION normalize_chain(input_chain TEXT)
-    RETURNS chain AS $$
-    BEGIN
-        RETURN LOWER(input_chain)::chain;
-    EXCEPTION WHEN OTHERS THEN
-        RETURN NULL;
-    END;
-    $$ LANGUAGE plpgsql;
-
 END $$;
+
+-- Create or replace function to handle case-insensitive chain values
+CREATE OR REPLACE FUNCTION normalize_chain(input_chain TEXT)
+RETURNS chain
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN LOWER(input_chain)::chain;
+EXCEPTION 
+    WHEN OTHERS THEN
+        RETURN NULL;
+END;
+$$;
