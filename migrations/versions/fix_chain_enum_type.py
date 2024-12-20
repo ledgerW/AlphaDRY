@@ -30,8 +30,8 @@ def upgrade() -> None:
         
         # Check if enum type exists
         enum_exists = conn.execute(
-            "SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = %s)",
-            (enum_name,)
+            "SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = :enum_name)",
+            {"enum_name": enum_name}
         ).scalar()
         
         if not enum_exists:
@@ -46,10 +46,10 @@ def upgrade() -> None:
             SELECT EXISTS (
                 SELECT 1 
                 FROM information_schema.columns 
-                WHERE table_name = %s AND column_name = 'chain'
+                WHERE table_name = :table_name AND column_name = 'chain'
             )
             """,
-            (table_name,)
+            {"table_name": table_name}
         ).scalar()
         
         if not column_exists:
@@ -78,10 +78,10 @@ def downgrade() -> None:
             SELECT EXISTS (
                 SELECT 1 
                 FROM information_schema.columns 
-                WHERE table_name = %s AND column_name = 'chain'
+                WHERE table_name = :table_name AND column_name = 'chain'
             )
             """,
-            (table_name,)
+            {"table_name": table_name}
         ).scalar()
         
         if column_exists:
@@ -89,8 +89,8 @@ def downgrade() -> None:
         
         # Check if enum exists before trying to remove
         enum_exists = conn.execute(
-            "SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = %s)",
-            (enum_name,)
+            "SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = :enum_name)",
+            {"enum_name": enum_name}
         ).scalar()
         
         if enum_exists:
