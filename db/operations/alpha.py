@@ -36,12 +36,12 @@ def create_alpha_report(report_data: Dict[str, Any]) -> Optional[AlphaReportDB]:
                     chain_value = opp_data.get('chain')
                     if isinstance(chain_value, str):
                         # Convert string to Chain enum using case-insensitive matching
-                        chain_upper = chain_value.upper()
+                        chain_lower = chain_value.lower()
                         try:
-                            # Find matching enum by name (case-insensitive)
+                            # Find matching enum by value (case-insensitive)
                             chain_enum = next(
                                 enum_val for enum_val in Chain 
-                                if enum_val.name == chain_upper
+                                if enum_val.value == chain_lower
                             )
                             opp_data['chain'] = chain_enum
                         except StopIteration:
