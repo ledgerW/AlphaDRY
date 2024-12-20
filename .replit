@@ -58,13 +58,13 @@ if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
     pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql &&
     psql $DATABASE_URL < db/deployment_safety.sql &&
     alembic upgrade head &&
-    uvicorn main:app --host 0.0.0.0 --port $PORT
+    uvicorn main:app --host 0.0.0.0 --port 80
 else
     # Development: Install deps, reset dev_ tables, run migrations
     pip install -r requirements.txt &&
     python -c 'from database import reset_db; reset_db()' &&
     alembic upgrade head &&
-    uvicorn main:app --host 0.0.0.0 --port $PORT
+    uvicorn main:app --host 0.0.0.0 --port 80
 fi
 """]
 build = ["sh", "-c", "pip install -r requirements.txt"]
