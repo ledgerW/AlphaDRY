@@ -53,8 +53,10 @@ waitForPort = 80
 [deployment]
 run = ["sh", "-c", """
 if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
-    # Production: Install deps, run migrations (preserves prod_ tables)
+    # Production: Install deps, run safety checks, run migrations (preserves prod_ tables)
     pip install -r requirements.txt &&
+    pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql &&
+    psql $DATABASE_URL < db/deployment_safety.sql &&
     alembic upgrade head &&
     uvicorn main:app --host 0.0.0.0 --port $PORT
 else
