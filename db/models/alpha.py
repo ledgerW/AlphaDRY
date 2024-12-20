@@ -7,7 +7,7 @@ class TokenOpportunityDB(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
-    chain: Chain = Field(sa_column=Column(SQLEnum(Chain)))
+    chain: Chain = Field(sa_column=Column(String, nullable=False))  # Store as string to use enum value
     contract_address: Optional[str]
     market_cap: Optional[float]
     community_score: int
@@ -24,6 +24,12 @@ class TokenOpportunityDB(SQLModel, table=True):
     # Relationship with TokenReport
     token_report_id: Optional[int] = Field(default=None, foreign_key=f"{get_env_prefix()}token_reports.id")
     token_report: Optional["TokenReportDB"] = Relationship(back_populates="opportunities")
+
+    @validator('chain', pre=True)
+    def validate_chain(cls, v):
+        if isinstance(v, Chain):
+            return v.value  # Use the enum value (lowercase string)
+        return v
 
 class AlphaReportDB(SQLModel, table=True):
     """Database model for alpha reports"""
