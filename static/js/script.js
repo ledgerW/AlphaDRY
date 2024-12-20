@@ -26,62 +26,80 @@ function getRecommendationClass(recommendation) {
 // Function to create an alpha card element
 function createAlphaCard(alpha) {
     const alphaDiv = document.createElement('div');
-    alphaDiv.className = 'alpha-card';
+    alphaDiv.className = 'alpha-card collapsed';
 
-    alphaDiv.innerHTML = `
+    // Create the always-visible header with timestamp
+    const headerHtml = `
         <div class="alpha-header">
-            <span class="token-name">${alpha.name}</span>
-            <span class="recommendation ${getRecommendationClass(alpha.recommendation)}">${alpha.recommendation}</span>
+            <div class="alpha-header-content">
+                <div class="header-left">
+                    <span class="recommendation ${getRecommendationClass(alpha.recommendation)}">${alpha.recommendation}</span>
+                    <span class="token-name">${alpha.name}</span>
+                </div>
+                <div class="header-right">
+                    <span class="timestamp">${new Date(alpha.created_at).toLocaleString()}</span>
+                </div>
+            </div>
+            <span class="collapse-indicator">▼</span>
         </div>
-        <div class="alpha-details">
-            <div class="detail-item">
-                <div class="detail-label">Chain:</div>
-                <div class="detail-value">${alpha.chain}</div>
-            </div>
-            ${alpha.contract_address ? `
-                <div class="detail-item">
-                    <div class="detail-label">Contract:</div>
-                    <div class="detail-value">${alpha.contract_address}</div>
-                </div>
-            ` : ''}
-            ${alpha.market_cap ? `
-                <div class="detail-item">
-                    <div class="detail-label">Market Cap:</div>
-                    <div class="detail-value">${formatMarketCap(alpha.market_cap)}</div>
-                </div>
-            ` : ''}
-            <div class="detail-item score-item">
-                <div class="detail-label">Community:</div>
-                <div class="detail-value">
-                    <span class="score-value">${alpha.community_score}/10</span>
-                </div>
-            </div>
-            <div class="detail-item score-item">
-                <div class="detail-label">Safety:</div>
-                <div class="detail-value">
-                    <span class="score-value">${alpha.safety_score}/10</span>
-                </div>
-            </div>
-        </div>
-        <div class="justification">
-            <strong>Analysis:</strong><br>
-            ${alpha.justification}
-        </div>
-        ${alpha.sources && alpha.sources.length > 0 ? `
-            <div class="sources">
-                <strong>Sources:</strong>
-                <ul>
-                    ${alpha.sources.map(source => `<li>${source}</li>`).join('')}
-                </ul>
-            </div>
-        ` : ''}
-        ${alpha.created_at ? `
-            <div class="timestamp">
-                ${new Date(alpha.created_at).toLocaleString()}
-            </div>
-        ` : ''}
     `;
-    
+
+    // Create the collapsible content
+    const contentHtml = `
+        <div class="alpha-content">
+            <div class="alpha-details">
+                <div class="detail-item">
+                    <div class="detail-label">Chain:</div>
+                    <div class="detail-value">${alpha.chain}</div>
+                </div>
+                ${alpha.contract_address ? `
+                    <div class="detail-item">
+                        <div class="detail-label">Contract:</div>
+                        <div class="detail-value">${alpha.contract_address}</div>
+                    </div>
+                ` : ''}
+                ${alpha.market_cap ? `
+                    <div class="detail-item">
+                        <div class="detail-label">Market Cap:</div>
+                        <div class="detail-value">${formatMarketCap(alpha.market_cap)}</div>
+                    </div>
+                ` : ''}
+                <div class="detail-item score-item">
+                    <div class="detail-label">Community:</div>
+                    <div class="detail-value">
+                        <span class="score-value">${alpha.community_score}/10</span>
+                    </div>
+                </div>
+                <div class="detail-item score-item">
+                    <div class="detail-label">Safety:</div>
+                    <div class="detail-value">
+                        <span class="score-value">${alpha.safety_score}/10</span>
+                    </div>
+                </div>
+            </div>
+            <div class="justification">
+                <strong>Analysis:</strong><br>
+                ${alpha.justification}
+            </div>
+            ${alpha.sources && alpha.sources.length > 0 ? `
+                <div class="sources">
+                    <strong>Sources:</strong>
+                    <ul>
+                        ${alpha.sources.map(source => `<li>${source}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    alphaDiv.innerHTML = headerHtml + contentHtml;
+
+    // Add click handler for collapsing/expanding
+    const header = alphaDiv.querySelector('.alpha-header');
+    header.addEventListener('click', () => {
+        alphaDiv.classList.toggle('collapsed');
+    });
+
     return alphaDiv;
 }
 

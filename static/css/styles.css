@@ -158,11 +158,33 @@ button:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap;
     gap: 10px;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
     border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+    cursor: pointer;
+}
+
+.alpha-header:hover {
+    background: rgba(0, 255, 136, 0.05);
+    border-radius: 8px;
+}
+
+.alpha-header-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.header-right {
+    margin-left: auto;
 }
 
 .token-name {
@@ -191,11 +213,33 @@ button:hover {
     color: #fff;
 }
 
+.collapse-indicator {
+    color: #00ff88;
+    font-size: 1.2em;
+    transition: transform 0.3s ease;
+}
+
+.alpha-card.collapsed .collapse-indicator {
+    transform: rotate(-90deg);
+}
+
+.alpha-content {
+    transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+    max-height: 2000px;
+    opacity: 1;
+    overflow: hidden;
+}
+
+.alpha-card.collapsed .alpha-content {
+    max-height: 0;
+    opacity: 0;
+}
+
 .alpha-details {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 15px;
-    margin-bottom: 20px;
+    margin: 20px 0;
 }
 
 .detail-item {
@@ -268,12 +312,8 @@ button:hover {
 }
 
 .timestamp {
-    margin-top: 15px;
     font-size: 0.85em;
     color: rgba(0, 255, 136, 0.7);
-    text-align: right;
-    border-top: 1px solid rgba(0, 255, 136, 0.2);
-    padding-top: 10px;
 }
 
 @keyframes glow {
