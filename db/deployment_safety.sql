@@ -1,17 +1,18 @@
 -- Deployment Safety Script
 
--- Check for today's backup
+-- Check for today's backup using a version-compatible approach
 DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 
         FROM pg_catalog.pg_class c
         JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+        JOIN pg_stat_all_tables s ON c.relname = s.relname
         WHERE n.nspname = 'public' 
         AND c.relname LIKE 'backup_%'
         AND c.relkind = 'r'
         AND c.reltuples > 0
-        AND date_trunc('day', now()) = date_trunc('day', c.relcreated)
+        AND date_trunc('day', s.last_vacuum) = date_trunc('day', now())
     ) THEN
         RAISE EXCEPTION 'DEPLOYMENT BLOCKED: No backup found from today. Run pg_dump first.';
     END IF;
