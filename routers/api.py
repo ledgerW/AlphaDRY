@@ -229,19 +229,19 @@ async def analyze_and_scout(input_data: SocialMediaInput):
         
         # Only run alpha scout if a purchasable token was found
         if token_report['mentions_purchasable_token']:
-            # Pass the token report to the alpha scout agent
-            token_alpha = await multi_agent_alpha_scout.ainvoke({
-                'messages': [token_report['reasoning']],
-                'token_report': token_report
-            })
+            # Create IsTokenReport instance for the multi_agent_alpha_scout endpoint
+            token_report_model = IsTokenReport(**token_report)
             
-            # Create report in database
+            # Call the multi_agent_alpha_scout endpoint
+            token_alpha = await get_multi_agent_alpha_scout(token_report_model)
+            
+            # Update the alpha report with token_report_id
             report_data = {
                 "is_relevant": token_report['mentions_purchasable_token'],
                 "analysis": token_report['reasoning'],
                 "message": token_report['reasoning'],
                 "opportunities": [token_alpha],
-                "token_report_id": token_report['id']  # Now we have the correct ID from the database
+                "token_report_id": token_report['id']
             }
             
             db_report = create_alpha_report(report_data)
