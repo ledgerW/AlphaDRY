@@ -34,19 +34,34 @@ def create_alpha_report(report_data: Dict[str, Any]) -> Optional[AlphaReportDB]:
                 for opp_data in report_data["opportunities"]:
                     # Handle chain conversion
                     chain_value = opp_data.get('chain')
+                    print(f"DEBUG: Original chain value: {chain_value}, type: {type(chain_value)}")
+                    
                     if isinstance(chain_value, str):
                         # Convert string to Chain enum using case-insensitive matching
                         chain_lower = chain_value.lower()
+                        print(f"DEBUG: Converted to lowercase: {chain_lower}")
+                        
                         try:
                             # Find matching enum by value (case-insensitive)
-                            chain_enum = next(
-                                enum_val for enum_val in Chain 
-                                if enum_val.value == chain_lower
-                            )
+                            chain_enum = None
+                            for enum_val in Chain:
+                                print(f"DEBUG: Checking enum value: {enum_val.value}")
+                                if enum_val.value == chain_lower:
+                                    chain_enum = enum_val
+                                    break
+                            
+                            if chain_enum is None:
+                                print(f"Warning: Invalid chain value '{chain_value}', defaulting to ethereum")
+                                chain_enum = Chain.ETHEREUM
+                            
+                            print(f"DEBUG: Final chain enum: {chain_enum}, value: {chain_enum.value}")
                             opp_data['chain'] = chain_enum
-                        except StopIteration:
-                            print(f"Warning: Invalid chain value '{chain_value}', defaulting to ethereum")
+                        except Exception as e:
+                            print(f"DEBUG: Error in chain conversion: {e}")
+                            print(f"Warning: Error converting chain '{chain_value}', defaulting to ethereum")
                             opp_data['chain'] = Chain.ETHEREUM
+                    
+                    print(f"DEBUG: Final chain value before DB insert: {opp_data.get('chain')}")
                     
                     # Create opportunity with both relationships
                     opportunity = TokenOpportunityDB(
