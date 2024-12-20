@@ -128,7 +128,7 @@ async def get_multi_hop_seek_alpha(token: Token):
     dependencies=[Depends(api_key_auth)],
     response_model=TokenAlpha
 )
-async def get_multi_agent_alpha_scout(token_report: IsTokenReport):
+async def get_multi_agent_alpha_scout(token_report: IsTokenReport, token_report_id: int | None = None):
     #try:
     # Pass the token report to the alpha scout agent
     token_alpha = await multi_agent_alpha_scout.ainvoke({
@@ -141,7 +141,8 @@ async def get_multi_agent_alpha_scout(token_report: IsTokenReport):
         "is_relevant": token_report.mentions_purchasable_token,
         "analysis": token_report.reasoning,
         "message": token_report.reasoning,
-        "opportunities": [token_alpha]
+        "opportunities": [token_alpha],
+        "token_report_id": token_report_id
     }
     
     db_report = create_alpha_report(report_data)
@@ -240,24 +241,8 @@ async def analyze_and_scout(input_data: SocialMediaInput):
             # Create IsTokenReport instance for the multi_agent_alpha_scout endpoint
             token_report_model = IsTokenReport(**token_report)
             
-            # Call the multi_agent_alpha_scout endpoint
-            token_alpha = await get_multi_agent_alpha_scout(token_report_model)
-            
-            # Update the alpha report with token_report_id
-            report_data = {
-                "is_relevant": token_report['mentions_purchasable_token'],
-                "analysis": token_report['reasoning'],
-                "message": token_report['reasoning'],
-                "opportunities": [token_alpha],
-                "token_report_id": token_report['id']
-            }
-            
-            db_report = create_alpha_report(report_data)
-            if not db_report:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Failed to save report to database"
-                )
+            # Call the multi_agent_alpha_scout endpoint with token_report_id
+            token_alpha = await get_multi_agent_alpha_scout(token_report_model, token_report['id'])
             
             return token_alpha
         
