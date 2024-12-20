@@ -1,3 +1,4 @@
+from sqlalchemy import Column, String
 from .base import *
 from agents.models import Chain
 
