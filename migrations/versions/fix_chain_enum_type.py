@@ -9,7 +9,6 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-from agents.models import Chain
 
 # revision identifiers, used by Alembic.
 revision: str = 'fix_chain_enum_type'
@@ -17,6 +16,8 @@ down_revision: Union[str, None] = 'fix_token_relationships'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# Define enum values directly in migration instead of importing
+CHAIN_VALUES = ('ethereum', 'polygon', 'arbitrum', 'optimism', 'base', 'solana')
 
 def upgrade() -> None:
     # Fix chain column in both dev and prod tables
@@ -35,9 +36,8 @@ def upgrade() -> None:
         
         if not enum_exists:
             # Create enum type
-            enum_values = [e.value for e in Chain]
             op.execute(
-                f'CREATE TYPE {enum_name} AS ENUM {str(tuple(enum_values))}'
+                f'CREATE TYPE {enum_name} AS ENUM {str(CHAIN_VALUES)}'
             )
         
         # Check if column exists
@@ -58,7 +58,7 @@ def upgrade() -> None:
                 table_name,
                 sa.Column(
                     'chain',
-                    sa.Enum(Chain, name=enum_name),
+                    postgresql.ENUM(*CHAIN_VALUES, name=enum_name),
                     nullable=True
                 )
             )
