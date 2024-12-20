@@ -25,6 +25,7 @@ from database import (
     AlphaReportDB, get_session, create_social_media_post,
     create_token_report
 )
+from db.operations.alpha import has_recent_token_report
 
 load_dotenv()
 
@@ -227,8 +228,15 @@ async def analyze_and_scout(input_data: SocialMediaInput):
         # First analyze the social post
         token_report = await analyze_social_post(input_data)
         
-        # Only run alpha scout if a purchasable token was found
+        # Only run alpha scout if:
+        # 1. A purchasable token was found
+        # 2. No recent token report exists for this contract address
         if token_report['mentions_purchasable_token']:
+            # Check for recent token report
+            if token_report.get('token_address') and has_recent_token_report(token_report['token_address']):
+                print(f"Skipping alpha scout - recent report exists for token {token_report['token_address']}")
+                return None
+                
             # Create IsTokenReport instance for the multi_agent_alpha_scout endpoint
             token_report_model = IsTokenReport(**token_report)
             

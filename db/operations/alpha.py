@@ -4,6 +4,8 @@ from ..models.alpha import AlphaReportDB, TokenOpportunityDB
 from ..models.social import TokenReportDB
 from agents.models import Chain
 import time
+from datetime import datetime, timedelta
+from sqlalchemy import func
 
 def create_alpha_report(report_data: Dict[str, Any]) -> Optional[AlphaReportDB]:
     """Create a new alpha report with its associated token opportunities."""
@@ -103,3 +105,28 @@ def get_all_alpha_reports() -> List[AlphaReportDB]:
     """Get all alpha reports."""
     with get_session() as session:
         return session.query(AlphaReportDB).all()
+
+def has_recent_token_report(contract_address: str, hours: int = 1) -> bool:
+    """
+    Check if there's a token report for the given contract address within the specified hours.
+    
+    Args:
+        contract_address: The contract address to check
+        hours: Number of hours to look back (default: 1)
+        
+    Returns:
+        bool: True if a recent report exists, False otherwise
+    """
+    if not contract_address:
+        return False
+        
+    with get_session() as session:
+        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        
+        # Query for any token reports with matching contract address within the time window
+        recent_report = session.query(TokenReportDB).filter(
+            TokenReportDB.token_address == contract_address,
+            TokenReportDB.created_at >= cutoff_time
+        ).first()
+        
+        return recent_report is not None
