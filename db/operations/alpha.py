@@ -108,14 +108,15 @@ def get_all_alpha_reports() -> List[AlphaReportDB]:
 
 def has_recent_token_report(contract_address: str, hours: int = 1) -> bool:
     """
-    Check if there's a token report for the given contract address within the specified hours.
+    Check if there are multiple token reports for the given contract address within the specified hours.
+    Returns True if there is more than one report, indicating alpha_scout has already run.
     
     Args:
         contract_address: The contract address to check
         hours: Number of hours to look back (default: 1)
         
     Returns:
-        bool: True if a recent report exists, False otherwise
+        bool: True if more than one recent report exists (indicating alpha_scout already ran), False otherwise
     """
     if not contract_address:
         return False
@@ -123,10 +124,11 @@ def has_recent_token_report(contract_address: str, hours: int = 1) -> bool:
     with get_session() as session:
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
         
-        # Query for any token reports with matching contract address within the time window
-        recent_report = session.query(TokenReportDB).filter(
+        # Count token reports with matching contract address within the time window
+        report_count = session.query(func.count(TokenReportDB.id)).filter(
             TokenReportDB.token_address == contract_address,
             TokenReportDB.created_at >= cutoff_time
-        ).first()
+        ).scalar()
         
-        return recent_report is not None
+        # Return True if there is more than one report (indicating alpha_scout already ran)
+        return report_count > 1

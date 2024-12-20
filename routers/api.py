@@ -225,16 +225,16 @@ async def analyze_social_post(input_data: SocialMediaInput):
 async def analyze_and_scout(input_data: SocialMediaInput):
     """Analyze social media post and scout for token opportunities in one step."""
     try:
-        # First analyze the social post
+        # First analyze the social post (this creates a token report)
         token_report = await analyze_social_post(input_data)
         
         # Only run alpha scout if:
         # 1. A purchasable token was found
-        # 2. No recent token report exists for this contract address
+        # 2. There aren't multiple token reports in the past hour (which would indicate alpha_scout already ran)
         if token_report['mentions_purchasable_token']:
-            # Check for recent token report
+            # Check for multiple token reports
             if token_report.get('token_address') and has_recent_token_report(token_report['token_address']):
-                print(f"Skipping alpha scout - recent report exists for token {token_report['token_address']}")
+                print(f"Skipping alpha scout - already ran for token {token_report['token_address']} in the past hour")
                 return None
                 
             # Create IsTokenReport instance for the multi_agent_alpha_scout endpoint
