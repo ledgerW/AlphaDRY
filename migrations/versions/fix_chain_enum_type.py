@@ -17,7 +17,8 @@ down_revision: Union[str, None] = 'fix_token_relationships'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-# Define enum values directly in migration instead of importing
+# Define enum values to match Chain enum in agents/models.py
+# These must be lowercase to match the enum values
 CHAIN_VALUES = ('ethereum', 'polygon', 'arbitrum', 'optimism', 'base', 'solana')
 
 def upgrade() -> None:
@@ -36,10 +37,29 @@ def upgrade() -> None:
         ).scalar()
         
         if not enum_exists:
-            # Create enum type
+            # Create enum type with lowercase values
             op.execute(
                 text(f'CREATE TYPE {enum_name} AS ENUM {str(CHAIN_VALUES)}')
             )
+        else:
+            # If enum exists, try to update it to include all values
+            # First get current values
+            current_values = conn.execute(
+                text("""
+                    SELECT e.enumlabel
+                    FROM pg_enum e
+                    JOIN pg_type t ON e.enumtypid = t.oid
+                    WHERE t.typname = :enum_name
+                """),
+                {"enum_name": enum_name}
+            ).scalars().all()
+            
+            # Add any missing values
+            for value in CHAIN_VALUES:
+                if value not in current_values:
+                    op.execute(
+                        text(f"ALTER TYPE {enum_name} ADD VALUE '{value}'")
+                    )
         
         # Check if column exists
         column_exists = conn.execute(

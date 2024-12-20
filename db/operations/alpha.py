@@ -35,12 +35,18 @@ def create_alpha_report(report_data: Dict[str, Any]) -> Optional[AlphaReportDB]:
                     # Handle chain conversion
                     chain_value = opp_data.get('chain')
                     if isinstance(chain_value, str):
-                        # Try to match the chain value case-insensitively
-                        chain_value = chain_value.upper()
-                        if chain_value == 'BASE':
-                            opp_data['chain'] = Chain.BASE
-                        elif chain_value == 'SOLANA':
-                            opp_data['chain'] = Chain.SOLANA
+                        # Convert string to Chain enum using case-insensitive matching
+                        chain_upper = chain_value.upper()
+                        try:
+                            # Find matching enum by name (case-insensitive)
+                            chain_enum = next(
+                                enum_val for enum_val in Chain 
+                                if enum_val.name == chain_upper
+                            )
+                            opp_data['chain'] = chain_enum
+                        except StopIteration:
+                            print(f"Warning: Invalid chain value '{chain_value}', defaulting to ethereum")
+                            opp_data['chain'] = Chain.ETHEREUM
                     
                     # Create opportunity with both relationships
                     opportunity = TokenOpportunityDB(
