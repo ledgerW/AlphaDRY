@@ -8,6 +8,7 @@ Create Date: 2024-12-20 10:00:00.000000
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
@@ -30,25 +31,25 @@ def upgrade() -> None:
         
         # Check if enum type exists
         enum_exists = conn.execute(
-            "SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = :enum_name)",
+            text("SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = :enum_name)"),
             {"enum_name": enum_name}
         ).scalar()
         
         if not enum_exists:
             # Create enum type
             op.execute(
-                f'CREATE TYPE {enum_name} AS ENUM {str(CHAIN_VALUES)}'
+                text(f'CREATE TYPE {enum_name} AS ENUM {str(CHAIN_VALUES)}')
             )
         
         # Check if column exists
         column_exists = conn.execute(
-            """
+            text("""
             SELECT EXISTS (
                 SELECT 1 
                 FROM information_schema.columns 
                 WHERE table_name = :table_name AND column_name = 'chain'
             )
-            """,
+            """),
             {"table_name": table_name}
         ).scalar()
         
@@ -74,13 +75,13 @@ def downgrade() -> None:
         
         # Check if column exists before trying to remove
         column_exists = conn.execute(
-            """
+            text("""
             SELECT EXISTS (
                 SELECT 1 
                 FROM information_schema.columns 
                 WHERE table_name = :table_name AND column_name = 'chain'
             )
-            """,
+            """),
             {"table_name": table_name}
         ).scalar()
         
@@ -89,9 +90,9 @@ def downgrade() -> None:
         
         # Check if enum exists before trying to remove
         enum_exists = conn.execute(
-            "SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = :enum_name)",
+            text("SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = :enum_name)"),
             {"enum_name": enum_name}
         ).scalar()
         
         if enum_exists:
-            op.execute(f'DROP TYPE IF EXISTS {enum_name}')
+            op.execute(text(f'DROP TYPE IF EXISTS {enum_name}'))

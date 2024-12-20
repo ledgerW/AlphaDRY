@@ -2,7 +2,7 @@ import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlmodel import SQLModel
 
 from alembic import context
@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from db.models.alpha import *
 from db.models.social import *
 from db.models.warpcast import *
+from db.connection import get_env_prefix
 
 # Load environment variables
 load_dotenv()
@@ -61,6 +62,9 @@ def run_migrations_online() -> None:
     In this scenario we need to create an Engine
     and associate a connection with the context.
     """
+    # Get current environment prefix
+    env_prefix = get_env_prefix()
+    
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -68,12 +72,20 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Set search_path to ensure we're working with the right schema
+        connection.execute(text("SET search_path TO public"))
+        
         context.configure(
             connection=connection,
-            target_metadata=target_metadata
+            target_metadata=target_metadata,
+            # Include environment prefix in migration context
+            include_schemas=True,
+            version_table_schema="public"
         )
 
         with context.begin_transaction():
+            # Log the current environment
+            print(f"Running migrations with {env_prefix} prefix")
             context.run_migrations()
 
 
