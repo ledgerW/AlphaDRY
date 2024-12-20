@@ -68,6 +68,15 @@ def sync_prod_tables():
             REFERENCES prod_alpha_reports(id);
         """)
         
+        # Token opportunities -> Token reports
+        cur.execute("""
+            ALTER TABLE prod_token_opportunities 
+            ADD CONSTRAINT fk_prod_token_opportunities_token_report 
+            FOREIGN KEY (token_report_id) 
+            REFERENCES prod_token_reports(id)
+            ON DELETE SET NULL;
+        """)
+        
         # Social media posts -> Token reports
         cur.execute("""
             ALTER TABLE prod_social_media_posts 

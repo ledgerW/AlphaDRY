@@ -1,6 +1,7 @@
 from typing import Dict, Any, List, Optional
 from ..models.base import get_session
 from ..models.alpha import AlphaReportDB, TokenOpportunityDB
+from ..models.social import TokenReportDB
 from agents.models import Chain
 import time
 
@@ -21,6 +22,14 @@ def create_alpha_report(report_data: Dict[str, Any]) -> Optional[AlphaReportDB]:
                 session.add(report)
                 session.flush()  # Flush to get the report ID
 
+                # If token_report_id is provided, fetch the token report
+                token_report = None
+                if "token_report_id" in report_data:
+                    token_report = session.get(TokenReportDB, report_data["token_report_id"])
+                    if not token_report:
+                        print(f"Warning: TokenReport with ID {report_data['token_report_id']} not found")
+                        continue
+
                 # Create associated opportunities
                 for opp_data in report_data["opportunities"]:
                     # Handle chain conversion
@@ -32,12 +41,30 @@ def create_alpha_report(report_data: Dict[str, Any]) -> Optional[AlphaReportDB]:
                             opp_data['chain'] = Chain.BASE
                         elif chain_value == 'SOLANA':
                             opp_data['chain'] = Chain.SOLANA
-                        
+                    
+                    # Create opportunity with both relationships
                     opportunity = TokenOpportunityDB(
-                        report_id=report.id,
-                        token_report_id=report_data.get("token_report_id"),  # Add token report ID
-                        **opp_data
+                        name=opp_data.get('name'),
+                        chain=opp_data.get('chain'),
+                        contract_address=opp_data.get('contract_address'),
+                        market_cap=opp_data.get('market_cap'),
+                        community_score=opp_data.get('community_score'),
+                        safety_score=opp_data.get('safety_score'),
+                        justification=opp_data.get('justification'),
+                        sources=opp_data.get('sources', []),
+                        recommendation=opp_data.get('recommendation', 'Hold'),
+                        report_id=report.id,  # Set alpha report relationship
+                        token_report_id=report_data.get("token_report_id")  # Set token report relationship
                     )
+                    
+                    # Establish bidirectional relationships
+                    opportunity.report = report
+                    report.opportunities.append(opportunity)
+                    
+                    if token_report:
+                        opportunity.token_report = token_report
+                        token_report.opportunities.append(opportunity)
+                    
                     session.add(opportunity)
 
                 session.commit()
@@ -45,6 +72,7 @@ def create_alpha_report(report_data: Dict[str, Any]) -> Optional[AlphaReportDB]:
                 return report
                 
         except Exception as e:
+            session.rollback()
             print(f"Error creating alpha report (attempt {attempt + 1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
                 time.sleep(retry_delay)

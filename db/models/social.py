@@ -40,3 +40,6 @@ class TokenReportDB(SQLModel, table=True):
 
     # Relationship with SocialMediaPost
     social_media_post: Optional[SocialMediaPostDB] = Relationship(back_populates="token_report")
+    
+    # Relationship with TokenOpportunity
+    opportunities: List["TokenOpportunityDB"] = Relationship(back_populates="token_report")

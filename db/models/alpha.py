@@ -21,9 +21,9 @@ class TokenOpportunityDB(SQLModel, table=True):
     report_id: Optional[int] = Field(default=None, foreign_key=f"{get_env_prefix()}alpha_reports.id")
     report: Optional["AlphaReportDB"] = Relationship(back_populates="opportunities")
 
-    # New relationship with TokenReport
+    # Relationship with TokenReport
     token_report_id: Optional[int] = Field(default=None, foreign_key=f"{get_env_prefix()}token_reports.id")
-    token_report: Optional["TokenReportDB"] = Relationship()
+    token_report: Optional["TokenReportDB"] = Relationship(back_populates="opportunities")
 
 class AlphaReportDB(SQLModel, table=True):
     """Database model for alpha reports"""

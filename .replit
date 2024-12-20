@@ -29,14 +29,14 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 # Only force reset in development environment
-args = """python -c '
+args = """python -c 
 import os
 from database import create_db_and_tables
 if os.getenv("REPLIT_DEPLOYMENT") != "1":
     create_db_and_tables(force_reset=True)
 else:
     create_db_and_tables(force_reset=False)
-'"""
+"""
 
 [[workflows.workflow]]
 name = "FastAPI Server"

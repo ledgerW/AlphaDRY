@@ -201,7 +201,7 @@ async def analyze_social_post(input_data: SocialMediaInput):
                 detail="Failed to analyze text with token finder agent"
             )
 
-        # Save token report to database
+        # Save token report to database and get the saved object
         db_token_report = create_token_report(token_report, social_post.id)
         if not db_token_report:
             raise HTTPException(
@@ -209,7 +209,9 @@ async def analyze_social_post(input_data: SocialMediaInput):
                 detail="Failed to save token report to database"
             )
 
-        return token_report
+        # Merge the database ID with the token report data
+        token_report_with_id = {**token_report, "id": db_token_report.id}
+        return token_report_with_id
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -239,7 +241,7 @@ async def analyze_and_scout(input_data: SocialMediaInput):
                 "analysis": token_report['reasoning'],
                 "message": token_report['reasoning'],
                 "opportunities": [token_alpha],
-                "token_report_id": token_report['id']  # Add token report ID to link the opportunity
+                "token_report_id": token_report['id']  # Now we have the correct ID from the database
             }
             
             db_report = create_alpha_report(report_data)
@@ -255,4 +257,5 @@ async def analyze_and_scout(input_data: SocialMediaInput):
         return None
         
     except Exception as e:
+        print(f"Error in analyze_and_scout: {str(e)}")  # Add error logging
         raise HTTPException(status_code=500, detail=str(e))

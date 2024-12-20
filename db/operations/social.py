@@ -35,11 +35,30 @@ def create_token_report(report_data: Dict[str, Any], post_id: Optional[int] = No
     """Create a new token report with optional association to a social media post."""
     with get_session() as session:
         try:
-            report = TokenReportDB(**report_data)
+            # Create token report with explicit field mapping
+            report = TokenReportDB(
+                mentions_purchasable_token=report_data.get('mentions_purchasable_token', False),
+                token_symbol=report_data.get('token_symbol'),
+                token_chain=report_data.get('token_chain'),
+                token_address=report_data.get('token_address'),
+                is_listed_on_dex=report_data.get('is_listed_on_dex'),
+                trading_pairs=report_data.get('trading_pairs', []),
+                confidence_score=report_data.get('confidence_score', 0),
+                reasoning=report_data.get('reasoning', '')
+            )
+            
+            # If post_id provided, establish bidirectional relationship
             if post_id:
                 post = session.get(SocialMediaPostDB, post_id)
                 if post:
+                    report.social_media_post = post
                     post.token_report = report
+                else:
+                    print(f"Warning: SocialMediaPost with ID {post_id} not found")
+            
+            # Initialize empty opportunities list
+            report.opportunities = []
+            
             session.add(report)
             session.commit()
             session.refresh(report)
