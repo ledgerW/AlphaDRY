@@ -1,6 +1,6 @@
-from sqlalchemy import Column, String
 from .base import *
 from agents.models import Chain
+from pydantic import validator
 
 class TokenOpportunityDB(SQLModel, table=True):
     """Database model for token investment opportunities"""
