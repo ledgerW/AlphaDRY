@@ -11,7 +11,7 @@ from sqlalchemy.orm import joinedload
 class TokenOpportunity(BaseModel):
     name: str
     chain: str
-    contract_address: str
+    contract_address: Optional[str] = None
     market_cap: Optional[float] = None
     community_score: Optional[int] = None
     safety_score: Optional[int] = None
