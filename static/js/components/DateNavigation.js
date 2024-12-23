@@ -10,18 +10,16 @@ export function createDateNavigation(dates, currentDateIndex, container) {
     const nav = document.createElement('div');
     nav.className = 'date-navigation';
     
-    const currentDate = dates[currentDateIndex];
-    let formattedDate;
+    // Get the current date from URL or use today if not available
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentUrlDate = urlParams.get('date') || new Date().toISOString().split('T')[0];
     
-    if (!currentDate) {
-        formattedDate = 'No data available';
-    } else {
-        try {
-            formattedDate = formatDate(currentDate);
-        } catch (error) {
-            console.error('Error formatting date for navigation:', error);
-            formattedDate = 'Invalid Date';
-        }
+    let formattedDate;
+    try {
+        formattedDate = formatDate(currentUrlDate);
+    } catch (error) {
+        console.error('Error formatting date for navigation:', error);
+        formattedDate = 'Invalid Date';
     }
     
     nav.innerHTML = `
@@ -77,20 +75,21 @@ export function createDateNavigation(dates, currentDateIndex, container) {
         return null;
     }
     
-    // Create navigation object with element, dates array, and update function
+    // Create navigation object with element and update function
     const navigation = {
         element: nav,
-        dates: dates,
-        update: function(newIndex) {
+        update: function(newDate) {
             const prevBtn = this.element.querySelector('#prevDay');
             const nextBtn = this.element.querySelector('#nextDay');
             const dateSpan = this.element.querySelector('.current-date');
             
             if (prevBtn && nextBtn && dateSpan) {
-                // Update button states and date display
-                prevBtn.disabled = false;
-                nextBtn.disabled = false;
-                dateSpan.textContent = formatDate(this.dates[newIndex]);
+                try {
+                    dateSpan.textContent = formatDate(newDate);
+                } catch (error) {
+                    console.error('Error updating date display:', error);
+                    dateSpan.textContent = 'Invalid Date';
+                }
                 
                 // Always enable buttons since we're using direct date navigation
                 prevBtn.disabled = false;

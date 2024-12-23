@@ -159,12 +159,23 @@ async function loadAlphaFeed(dateIndex = null) {
         console.log('Validated opportunities count:', allOpportunities.length);
         console.log('Processed opportunities:', allOpportunities);
         
+        // Create navigation if it doesn't exist
+        if (!window.navigation?.element) {
+            window.navigation = createDateNavigation([], 0, container);
+        }
+
         if (allOpportunities.length === 0) {
             // Clear container but preserve navigation
             preserveNavigationAndClear(container);
+            
+            // Update navigation with URL date or today's date
+            if (window.navigation?.element) {
+                window.navigation.update(urlDate || new Date().toISOString().split('T')[0]);
+            }
+            
             const noDataDiv = document.createElement('div');
             noDataDiv.className = 'no-data';
-            noDataDiv.textContent = 'No alpha reports available';
+            noDataDiv.textContent = 'No alpha reports available for this date';
             container.appendChild(noDataDiv);
             return;
         }
@@ -215,18 +226,13 @@ async function loadAlphaFeed(dateIndex = null) {
         preserveNavigationAndClear(container);
         
         try {
-            // Update existing navigation or create new one
-            if (window.navigation?.element) {
-                // Update existing navigation
-                window.navigation.dates = sortedDates;
-                window.navigation.update(dateIndex);
-            } else {
-                // Create new navigation
-                window.navigation = createDateNavigation(sortedDates, dateIndex, container);
-            }
-            
             // Get opportunities for current date
             const currentDate = sortedDates[dateIndex];
+            
+            // Update navigation with current date
+            if (window.navigation?.element) {
+                window.navigation.update(currentDate);
+            }
             if (currentDate && groupedOpportunities[currentDate]) {
                 // Filter for most recent entry per token
                 const filteredOpportunities = filterMostRecentPerToken(groupedOpportunities[currentDate]);
