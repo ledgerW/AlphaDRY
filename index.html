@@ -10,7 +10,7 @@
     <div class="container">
         <h1>🚀 AlphaDRY 💎</h1>
         
-        <div class="input-section">
+        <div class="input-section" style="display: none;">
             <h2>Token Report Input</h2>
             <div class="form-group">
                 <label class="checkbox-label">
@@ -54,7 +54,7 @@
                 <textarea id="reasoning" placeholder="Explain why this is classified as mentioning a purchasable token or not..."></textarea>
             </div>
 
-            <button onclick="submitReport()">🔥 SUBMIT REPORT 🔥</button>
+            <button onclick="window.submitReport()">🔥 SUBMIT REPORT 🔥</button>
             <div class="error" id="errorMessage"></div>
             <div class="loading" id="loadingIndicator">🚀 Processing... 💎</div>
         </div>
@@ -67,6 +67,6 @@
         </div>
     </div>
 
-    <script src="static/js/script.js"></script>
+    <script type="module" src="static/js/script.js"></script>
 </body>
 </html>

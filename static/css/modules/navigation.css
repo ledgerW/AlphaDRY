@@ -1,0 +1,49 @@
+.date-navigation {
+    position: sticky;
+    top: 10px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.95);
+    border: 2px solid #00ff88;
+    border-radius: 10px;
+    animation: glow 2s infinite alternate;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.date-navigation .nav-btn {
+    background: transparent;
+    color: #00ff88;
+    border: 2px solid #00ff88;
+    padding: 8px 15px;
+    min-width: auto;
+    margin: 0;
+    font-size: 1.2em;
+    transition: all 0.2s ease;
+}
+
+.date-navigation .nav-btn:hover:not([disabled]) {
+    background: rgba(0, 255, 136, 0.2);
+    transform: scale(1.1);
+}
+
+.date-navigation .nav-btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.date-navigation .current-date {
+    font-size: 1.1em;
+    font-weight: bold;
+    padding: 8px 15px;
+    background: rgba(0, 255, 136, 0.1);
+    border-radius: 5px;
+    min-width: 150px;
+    text-align: center;
+}

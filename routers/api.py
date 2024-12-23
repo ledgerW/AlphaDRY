@@ -1,12 +1,42 @@
 import random
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from sqlalchemy.orm import joinedload
-from datetime import datetime
+
+class TokenOpportunity(BaseModel):
+    name: str
+    chain: str
+    contract_address: str
+    market_cap: Optional[float] = None
+    community_score: Optional[int] = None
+    safety_score: Optional[int] = None
+    justification: str
+    sources: List[str]
+    recommendation: str
+    created_at: datetime
+
+    class Config:
+        json_encoders = {
+            datetime: lambda dt: dt.isoformat()
+        }
+
+class AlphaReport(BaseModel):
+    id: int
+    is_relevant: bool
+    analysis: str
+    message: str
+    created_at: datetime
+    opportunities: List[TokenOpportunity]
+
+    class Config:
+        json_encoders = {
+            datetime: lambda dt: dt.isoformat()
+        }
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -58,40 +88,73 @@ class SocialMediaInput(BaseModel):
 
 router = APIRouter(prefix="/api", tags=["api"])
 
+from datetime import datetime, timedelta
+from typing import Optional
+
 @router.get("/alpha_reports")
-async def get_alpha_reports():
+async def get_alpha_reports(date: Optional[str] = None):
     """Get all alpha reports from the database."""
     try:
         with get_session() as session:
             # Use joinedload to eagerly load the opportunities relationship
-            reports = session.query(AlphaReportDB).options(joinedload(AlphaReportDB.opportunities)).all()
+            query = session.query(AlphaReportDB).options(joinedload(AlphaReportDB.opportunities))
             
-            # Convert SQLModel objects to dictionaries with proper serialization
-            return [
-                {
-                    "id": report.id,
-                    "is_relevant": report.is_relevant,
-                    "analysis": report.analysis,
-                    "message": report.message,
-                    "created_at": report.created_at.isoformat(),
-                    "opportunities": [
-                        {
-                            "name": opp.name,
-                            "chain": str(opp.chain),
-                            "contract_address": opp.contract_address,
-                            "market_cap": float(opp.market_cap) if opp.market_cap else None,
-                            "community_score": opp.community_score,
-                            "safety_score": opp.safety_score,
-                            "justification": opp.justification,
-                            "sources": opp.sources,
-                            "recommendation": opp.recommendation,
-                            "created_at": opp.created_at.isoformat()
-                        }
+            if date:
+                # Convert date string to datetime
+                target_date = datetime.strptime(date, '%Y-%m-%d')
+                next_date = target_date + timedelta(days=1)
+                
+                # Filter reports for the specified date
+                query = query.filter(
+                    AlphaReportDB.created_at >= target_date,
+                    AlphaReportDB.created_at < next_date
+                )
+            
+            reports = query.all()
+            
+            # Convert SQLModel objects to Pydantic models
+            reports_data = [
+                AlphaReport(
+                    id=report.id,
+                    is_relevant=report.is_relevant,
+                    analysis=report.analysis,
+                    message=report.message,
+                    created_at=report.created_at,
+                    opportunities=[
+                        TokenOpportunity(
+                            name=opp.name,
+                            chain=str(opp.chain),
+                            contract_address=opp.contract_address,
+                            market_cap=float(opp.market_cap) if opp.market_cap else None,
+                            community_score=opp.community_score,
+                            safety_score=opp.safety_score,
+                            justification=opp.justification,
+                            sources=opp.sources,
+                            recommendation=opp.recommendation,
+                            created_at=opp.created_at
+                        )
                         for opp in report.opportunities
                     ]
-                }
+                )
                 for report in reports
             ]
+            from fastapi.encoders import jsonable_encoder
+            from fastapi.responses import JSONResponse
+            
+            # Convert Pydantic models to JSON with proper formatting
+            json_data = jsonable_encoder(
+                [report.dict(by_alias=True) for report in reports_data],
+                exclude_none=True,
+                custom_encoder={
+                    datetime: lambda dt: dt.isoformat()
+                }
+            )
+            
+            # Return a properly formatted JSON response
+            return JSONResponse(
+                content=json_data,
+                headers={"Content-Type": "application/json; charset=utf-8"}
+            )
     except Exception as e:
         print(f"Error in get_alpha_reports: {str(e)}")
         raise HTTPException(

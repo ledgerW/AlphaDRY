@@ -1,0 +1,25 @@
+@media screen and (max-width: 480px) {
+    body {
+        padding: 5px;
+    }
+
+    .container {
+        padding: 0 5px;
+    }
+
+    .input-section {
+        padding: 10px;
+    }
+
+    .alpha-card {
+        padding: 15px;
+    }
+
+    .alpha-details {
+        grid-template-columns: 1fr;
+    }
+
+    .detail-item {
+        padding: 10px;
+    }
+}
