@@ -200,39 +200,65 @@ async def get_multi_agent_alpha_scout(token_report: IsTokenReport, token_report_
         })
         
         with get_session() as session:
-            # If token_report_id is provided, get the TokenReportDB instance
-            token_report_db = None
-            if token_report_id:
-                token_report_db = session.query(TokenReportDB).get(token_report_id)
-                if not token_report_db:
+            try:
+                # If token_report_id is provided, get the TokenReportDB instance and verify it exists
+                token_report_db = None
+                if token_report_id:
+                    token_report_db = session.query(TokenReportDB).get(token_report_id)
+                    if not token_report_db:
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"Token report with ID {token_report_id} not found"
+                        )
+                    # Ensure the token report is attached to the session
+                    session.add(token_report_db)
+                
+                # Create report in database using the same session
+                report_data = {
+                    "is_relevant": token_report.mentions_purchasable_token,
+                    "analysis": token_report.reasoning,
+                    "message": token_report.reasoning,
+                    "opportunities": [token_alpha],
+                    "token_report_id": token_report_id
+                }
+                
+                db_report = create_alpha_report(report_data, existing_session=session)
+                if not db_report:
                     raise HTTPException(
                         status_code=500,
-                        detail=f"Token report with ID {token_report_id} not found"
+                        detail="Failed to save report to database"
                     )
-            
-            # Create report in database
-            report_data = {
-                "is_relevant": token_report.mentions_purchasable_token,
-                "analysis": token_report.reasoning,
-                "message": token_report.reasoning,
-                "opportunities": [token_alpha],
-                "token_report_id": token_report_id
-            }
-            
-            db_report = create_alpha_report(report_data)
-            if not db_report:
+                
+                # If we have a token report, ensure relationships are properly established
+                if token_report_db and db_report.opportunities:
+                    for opportunity in db_report.opportunities:
+                        # Ensure bidirectional relationship
+                        if opportunity not in token_report_db.opportunities:
+                            token_report_db.opportunities.append(opportunity)
+                            opportunity.token_report = token_report_db
+                
+                # Commit all changes in a single transaction
+                session.commit()
+                
+                # Refresh to ensure all relationships are loaded
+                session.refresh(db_report)
+                if token_report_db:
+                    session.refresh(token_report_db)
+                    
+                    # Verify relationships were properly established
+                    if not token_report_db.opportunities:
+                        print(f"Warning: Token report {token_report_id} has no opportunities after commit")
+                        
+                return token_alpha
+                
+            except Exception as e:
+                session.rollback()
+                print(f"Database error in get_multi_agent_alpha_scout: {str(e)}")
                 raise HTTPException(
                     status_code=500,
-                    detail="Failed to save report to database"
+                    detail=f"Database error: {str(e)}"
                 )
-            
-            # If we have a token report, establish the relationship
-            if token_report_db:
-                token_report_db.opportunities = db_report.opportunities
-                session.commit()
-        
-        return token_alpha
-        
+                
     except Exception as e:
         print(f"Error in get_multi_agent_alpha_scout: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -242,7 +268,7 @@ async def get_multi_agent_alpha_scout(token_report: IsTokenReport, token_report_
     dependencies=[Depends(api_key_auth)],
     response_model=IsTokenReport
 )
-async def analyze_social_post(input_data: SocialMediaInput):
+async def analyze_social_post(input_data: SocialMediaInput, existing_session=None):
     """Analyze social media post text for token mentions and create a token report."""
     try:
         # Convert input data to dict and handle datetime serialization
@@ -266,7 +292,7 @@ async def analyze_social_post(input_data: SocialMediaInput):
             "raw_data": raw_data  # Use the serialized version
         }
         
-        social_post = create_social_media_post(post_data)
+        social_post = create_social_media_post(post_data, existing_session=existing_session)
         if not social_post:
             raise HTTPException(
                 status_code=500,
@@ -301,7 +327,7 @@ async def analyze_social_post(input_data: SocialMediaInput):
             )
 
         # Save token report to database and get the saved object
-        db_token_report = create_token_report(token_report, social_post.id)
+        db_token_report = create_token_report(token_report, social_post.id, existing_session=existing_session)
         if not db_token_report:
             raise HTTPException(
                 status_code=500,
@@ -322,53 +348,61 @@ async def analyze_social_post(input_data: SocialMediaInput):
 )
 async def analyze_and_scout(input_data: SocialMediaInput):
     """Analyze social media post and scout for token opportunities in one step."""
+    session = None
     try:
-        with get_session() as session:
-            # First analyze the social post (this creates a token report or returns existing one)
-            token_report = await analyze_social_post(input_data)
-            
-            # Only run alpha scout if:
-            # 1. A purchasable token was found
-            # 2. The token chain is Base or Solana
-            # 3. The token has an address
-            # 4. There aren't multiple token reports in the past hour (which would indicate alpha_scout already ran)
-            # 5. The token report was just created (not an existing one)
-            if (token_report['mentions_purchasable_token'] and
-                token_report.get('token_chain') in ['Base', 'Solana'] and
-                token_report.get('token_address')):
-                # Check for multiple token reports
-                if has_recent_token_report(token_report['token_address']):
-                    print(f"Skipping alpha scout - already ran for token {token_report['token_address']} in the past hour")
-                    return None
-                
-                # Get the actual TokenReportDB instance from the database
-                db_token_report = session.query(TokenReportDB).get(token_report['id'])
-                if not db_token_report:
-                    raise HTTPException(
-                        status_code=500,
-                        detail="Failed to retrieve token report from database"
-                    )
-                
-                # Create IsTokenReport instance using the database instance
-                token_report_model = IsTokenReport(
-                    mentions_purchasable_token=db_token_report.mentions_purchasable_token,
-                    token_symbol=db_token_report.token_symbol,
-                    token_chain=db_token_report.token_chain,
-                    token_address=db_token_report.token_address,
-                    is_listed_on_dex=db_token_report.is_listed_on_dex,
-                    trading_pairs=db_token_report.trading_pairs,
-                    confidence_score=db_token_report.confidence_score,
-                    reasoning=db_token_report.reasoning
-                )
-                
-                # Call the multi_agent_alpha_scout endpoint with token_report_id
-                token_alpha = await get_multi_agent_alpha_scout(token_report_model, db_token_report.id)
-                
-                return token_alpha
+        session = get_session()
+        session.__enter__()
         
+        # First analyze the social post (this creates a token report or returns existing one)
+        token_report = await analyze_social_post(input_data, existing_session=session)
+        
+        # Only run alpha scout if:
+        # 1. A purchasable token was found
+        # 2. The token chain is Base or Solana
+        # 3. The token has an address
+        # 4. There aren't multiple token reports in the past hour (which would indicate alpha_scout already ran)
+        # 5. The token report was just created (not an existing one)
+        if (token_report['mentions_purchasable_token'] and
+            token_report.get('token_chain') in ['Base', 'Solana'] and
+            token_report.get('token_address')):
+            # Check for multiple token reports
+            if has_recent_token_report(token_report['token_address']):
+                print(f"Skipping alpha scout - already ran for token {token_report['token_address']} in the past hour")
+                return None
+            
+            # Get the actual TokenReportDB instance from the database
+            db_token_report = session.query(TokenReportDB).get(token_report['id'])
+            if not db_token_report:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to retrieve token report from database"
+                )
+            
+            # Create IsTokenReport instance using the database instance
+            token_report_model = IsTokenReport(
+                mentions_purchasable_token=db_token_report.mentions_purchasable_token,
+                token_symbol=db_token_report.token_symbol,
+                token_chain=db_token_report.token_chain,
+                token_address=db_token_report.token_address,
+                is_listed_on_dex=db_token_report.is_listed_on_dex,
+                trading_pairs=db_token_report.trading_pairs,
+                confidence_score=db_token_report.confidence_score,
+                reasoning=db_token_report.reasoning
+            )
+            
+            # Call the multi_agent_alpha_scout endpoint with token_report_id
+            token_alpha = await get_multi_agent_alpha_scout(token_report_model, db_token_report.id)
+            
+            return token_alpha
+    
         # If no purchasable token found, return None
         return None
         
     except Exception as e:
+        if session:
+            session.rollback()
         print(f"Error in analyze_and_scout: {str(e)}")  # Add error logging
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if session:
+            session.__exit__(None, None, None)

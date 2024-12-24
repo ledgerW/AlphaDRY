@@ -42,4 +42,10 @@ class TokenReportDB(SQLModel, table=True):
     social_media_post: Optional[SocialMediaPostDB] = Relationship(back_populates="token_report")
     
     # Relationship with TokenOpportunity
-    opportunities: List["TokenOpportunityDB"] = Relationship(back_populates="token_report")
+    opportunities: List["TokenOpportunityDB"] = Relationship(
+        back_populates="token_report",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "lazy": "joined"
+        }
+    )
