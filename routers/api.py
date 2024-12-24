@@ -294,10 +294,14 @@ async def analyze_and_scout(input_data: SocialMediaInput):
         
         # Only run alpha scout if:
         # 1. A purchasable token was found
-        # 2. There aren't multiple token reports in the past hour (which would indicate alpha_scout already ran)
-        if token_report['mentions_purchasable_token']:
+        # 2. The token chain is Base or Solana
+        # 3. The token has an address
+        # 4. There aren't multiple token reports in the past hour (which would indicate alpha_scout already ran)
+        if (token_report['mentions_purchasable_token'] and
+            token_report.get('token_chain') in ['Base', 'Solana'] and
+            token_report.get('token_address')):
             # Check for multiple token reports
-            if token_report.get('token_address') and has_recent_token_report(token_report['token_address']):
+            if has_recent_token_report(token_report['token_address']):
                 print(f"Skipping alpha scout - already ran for token {token_report['token_address']} in the past hour")
                 return None
                 
