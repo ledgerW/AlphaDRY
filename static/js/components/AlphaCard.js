@@ -11,7 +11,18 @@ export function createAlphaCard(alpha) {
             <div class="alpha-header-content">
                 <div class="header-left">
                     <span class="recommendation ${getRecommendationClass(alpha.recommendation)}">${escapeHtml(alpha.recommendation)}</span>
-                    <span class="token-name">${escapeHtml(alpha.name)}</span>
+                    <span class="chain-info">
+                        <img src="/static/${alpha.chain.toLowerCase() === 'solana' ? 'solana_icon.svg' : 'base_icon.svg'}" 
+                             alt="${escapeHtml(alpha.chain)} icon" 
+                             class="chain-icon" />
+                        ${escapeHtml(alpha.chain)}
+                    </span>
+                    <span class="token-name">
+                        ${alpha.contract_address ? `
+                            <a href="/token?address=${encodeURIComponent(alpha.contract_address)}" 
+                               class="token-link">${escapeHtml(alpha.name)}</a>
+                        ` : escapeHtml(alpha.name)}
+                    </span>
                 </div>
                 <div class="header-right">
                     <span class="timestamp">${new Date(alpha.created_at.replace(/^:/, '').split('.')[0] + 'Z').toLocaleString()}</span>
@@ -25,10 +36,6 @@ export function createAlphaCard(alpha) {
     const contentHtml = `
         <div class="alpha-content">
             <div class="alpha-details">
-                <div class="detail-item">
-                    <div class="detail-label">Chain:</div>
-                    <div class="detail-value">${escapeHtml(alpha.chain)}</div>
-                </div>
                 ${alpha.contract_address ? `
                     <div class="detail-item">
                         <div class="detail-label">Contract:</div>

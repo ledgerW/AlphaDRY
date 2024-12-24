@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Details</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        .token-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            padding: 20px;
+        }
+        
+        .token-opportunity, .token-report, .social-post {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            padding: 15px;
+            animation: glow 2s infinite alternate;
+        }
+
+        .token-header {
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ff88;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            animation: glow 2s infinite alternate;
+        }
+
+        .token-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .token-chain {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chain-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        .grid-row {
+            display: contents;
+        }
+
+        .grid-row > div {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="token-header">
+        <div class="token-name"></div>
+        <div class="token-chain"></div>
+    </div>
+    <div class="token-grid">
+        <!-- Content will be populated by JavaScript -->
+    </div>
+
+    <script type="module">
+        import { fetchAlphaReports } from '/static/js/api/alphaApi.js';
+        import { escapeHtml } from '/static/js/utils/formatting.js';
+
+        // Add error message styling
+        const style = document.createElement('style');
+        style.textContent = `
+            .error-message {
+                background: rgba(0, 0, 0, 0.7);
+                border: 2px solid #ff4444;
+                border-radius: 10px;
+                padding: 20px;
+                text-align: center;
+                grid-column: 1 / -1;
+                animation: glow 2s infinite alternate;
+            }
+            
+            .error-message p {
+                margin: 10px 0;
+                color: #ff4444;
+            }
+
+            .error-message .token-address {
+                background: rgba(255, 68, 68, 0.1);
+                padding: 10px;
+                border-radius: 5px;
+                font-family: monospace;
+                word-break: break-all;
+                margin: 15px 0;
+            }
+            
+            .loading {
+                text-align: center;
+                grid-column: 1 / -1;
+                padding: 20px;
+                color: #00ff88;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Show loading state
+        document.querySelector('.token-grid').innerHTML = '<div class="loading">Loading token data...</div>';
+
+        async function loadTokenData() {
+            // Get token address from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const tokenAddress = urlParams.get('address');
+            const tokenGrid = document.querySelector('.token-grid');
+            
+            if (!tokenAddress) {
+                tokenGrid.innerHTML = `
+                    <div class="error-message">
+                        <p>Error: No token address provided</p>
+                        <p>Please access this page through a token link from the home page.</p>
+                    </div>`;
+                return;
+            }
+
+            try {
+                const reports = await fetchAlphaReports();
+                
+                // Filter opportunities for this token address
+                const tokenOpportunities = reports.flatMap(report => 
+                    report.opportunities.filter(opp => 
+                        opp.contract_address === tokenAddress
+                    ).map(opp => ({
+                        opportunity: opp,
+                        report: report
+                    }))
+                );
+
+                // Create grid rows for each opportunity
+                tokenOpportunities.forEach(({ opportunity, report }) => {
+                    const row = document.createElement('div');
+                    row.className = 'grid-row';
+                    
+                    // Token Opportunity
+                    const oppDiv = document.createElement('div');
+                    oppDiv.className = 'token-opportunity';
+                    oppDiv.innerHTML = `
+                        <h3>Token Opportunity</h3>
+                        <p><strong>Recommendation:</strong> ${escapeHtml(opportunity.recommendation)}</p>
+                        <p><strong>Market Cap:</strong> ${opportunity.market_cap ? '$' + opportunity.market_cap.toLocaleString() : 'N/A'}</p>
+                        <p><strong>Community Score:</strong> ${opportunity.community_score || 'N/A'}</p>
+                        <p><strong>Safety Score:</strong> ${opportunity.safety_score || 'N/A'}</p>
+                        <p><strong>Analysis:</strong><br>${escapeHtml(opportunity.justification)}</p>
+                    `;
+                    
+                    // Token Report
+                    const reportDiv = document.createElement('div');
+                    reportDiv.className = 'token-report';
+                    reportDiv.innerHTML = `
+                        <h3>Token Report</h3>
+                        <p><strong>Analysis:</strong><br>${escapeHtml(report.analysis)}</p>
+                        <p><strong>Created:</strong> ${new Date(report.created_at).toLocaleString()}</p>
+                    `;
+                    
+                    // Social Post
+                    const socialDiv = document.createElement('div');
+                    socialDiv.className = 'social-post';
+                    socialDiv.innerHTML = `
+                        <h3>Social Post</h3>
+                        <p>${escapeHtml(report.message)}</p>
+                    `;
+                    
+                    row.appendChild(oppDiv);
+                    row.appendChild(reportDiv);
+                    row.appendChild(socialDiv);
+                    tokenGrid.appendChild(row);
+                });
+
+                if (tokenOpportunities.length === 0) {
+                    tokenGrid.innerHTML = `
+                        <div class="error-message">
+                            <p>No opportunities found for token address:</p>
+                            <p class="token-address">${escapeHtml(tokenAddress)}</p>
+                            <p>This token may not have been analyzed yet.</p>
+                        </div>`;
+                } else {
+                    // Update header with first opportunity's details
+                    const firstOpp = tokenOpportunities[0].opportunity;
+                    document.querySelector('.token-name').textContent = firstOpp.name;
+                    document.querySelector('.token-chain').innerHTML = `
+                        <img src="/static/${firstOpp.chain.toLowerCase() === 'solana' ? 'solana_icon.svg' : 'base_icon.svg'}" 
+                             alt="${escapeHtml(firstOpp.chain)} icon" 
+                             class="chain-icon" />
+                        ${escapeHtml(firstOpp.chain)}
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading token data:', error);
+                document.querySelector('.token-grid').innerHTML = 
+                    '<p>Error loading token data. Please try again later.</p>';
+            }
+        }
+
+        loadTokenData();
+    </script>
+</body>
+</html>

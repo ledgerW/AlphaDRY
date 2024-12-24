@@ -301,7 +301,7 @@ async def analyze_social_post(input_data: SocialMediaInput, existing_session=Non
 
         # Check if this is an existing post by comparing created_at with current time
         # If the post was created more than 1 minute ago, consider it an existing post
-        if (datetime.utcnow() - social_post.created_at).total_seconds() > 60:
+        if (datetime.utcnow() - social_post.created_at).total_seconds() > 15:
             print(f"Skipping analysis - social post {social_post.id} already exists")
             return None
 
