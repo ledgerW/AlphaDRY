@@ -266,7 +266,7 @@ async def get_multi_agent_alpha_scout(token_report: IsTokenReport, token_report_
 @router.post(
     "/analyze_social_post",
     dependencies=[Depends(api_key_auth)],
-    response_model=IsTokenReport
+    response_model=IsTokenReport | None
 )
 async def analyze_social_post(input_data: SocialMediaInput, existing_session=None):
     """Analyze social media post text for token mentions and create a token report."""
@@ -299,21 +299,11 @@ async def analyze_social_post(input_data: SocialMediaInput, existing_session=Non
                 detail="Failed to save social media post to database"
             )
 
-        # If the post already had a token report (meaning it was previously processed),
-        # return the existing token report
-        if hasattr(social_post, 'token_report') and social_post.token_report:
-            existing_report = social_post.token_report
-            return {
-                "id": existing_report.id,
-                "mentions_purchasable_token": existing_report.mentions_purchasable_token,
-                "token_symbol": existing_report.token_symbol,
-                "token_chain": existing_report.token_chain,
-                "token_address": existing_report.token_address,
-                "is_listed_on_dex": existing_report.is_listed_on_dex,
-                "trading_pairs": existing_report.trading_pairs,
-                "confidence_score": existing_report.confidence_score,
-                "reasoning": existing_report.reasoning
-            }
+        # Check if this is an existing post by comparing created_at with current time
+        # If the post was created more than 1 minute ago, consider it an existing post
+        if (datetime.utcnow() - social_post.created_at).total_seconds() > 60:
+            print(f"Skipping analysis - social post {social_post.id} already exists")
+            return None
 
         # For new posts, proceed with analysis
         token_report = await crypto_text_classifier.ainvoke({
@@ -353,45 +343,42 @@ async def analyze_and_scout(input_data: SocialMediaInput):
         session = get_session()
         session.__enter__()
         
-        # First analyze the social post (this creates a token report or returns existing one)
+        # First analyze the social post
         token_report = await analyze_social_post(input_data, existing_session=session)
+        
+        # If analyze_social_post returns None, it means this is an existing post
+        if token_report is None:
+            print("Skipping alpha scout - existing social post")
+            return None
         
         # Only run alpha scout if:
         # 1. A purchasable token was found
         # 2. The token chain is Base or Solana
         # 3. The token has an address
-        # 4. There aren't multiple token reports in the past hour (which would indicate alpha_scout already ran)
-        # 5. The token report was just created (not an existing one)
+        # 4. There aren't multiple token reports in the past hour
         if (token_report['mentions_purchasable_token'] and
             token_report.get('token_chain') in ['Base', 'Solana'] and
             token_report.get('token_address')):
+            
             # Check for multiple token reports
             if has_recent_token_report(token_report['token_address']):
                 print(f"Skipping alpha scout - already ran for token {token_report['token_address']} in the past hour")
                 return None
             
-            # Get the actual TokenReportDB instance from the database
-            db_token_report = session.query(TokenReportDB).get(token_report['id'])
-            if not db_token_report:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Failed to retrieve token report from database"
-                )
-            
-            # Create IsTokenReport instance using the database instance
+            # Create IsTokenReport instance
             token_report_model = IsTokenReport(
-                mentions_purchasable_token=db_token_report.mentions_purchasable_token,
-                token_symbol=db_token_report.token_symbol,
-                token_chain=db_token_report.token_chain,
-                token_address=db_token_report.token_address,
-                is_listed_on_dex=db_token_report.is_listed_on_dex,
-                trading_pairs=db_token_report.trading_pairs,
-                confidence_score=db_token_report.confidence_score,
-                reasoning=db_token_report.reasoning
+                mentions_purchasable_token=token_report['mentions_purchasable_token'],
+                token_symbol=token_report['token_symbol'],
+                token_chain=token_report['token_chain'],
+                token_address=token_report['token_address'],
+                is_listed_on_dex=token_report['is_listed_on_dex'],
+                trading_pairs=token_report['trading_pairs'],
+                confidence_score=token_report['confidence_score'],
+                reasoning=token_report['reasoning']
             )
             
             # Call the multi_agent_alpha_scout endpoint with token_report_id
-            token_alpha = await get_multi_agent_alpha_scout(token_report_model, db_token_report.id)
+            token_alpha = await get_multi_agent_alpha_scout(token_report_model, token_report['id'])
             
             return token_alpha
     
