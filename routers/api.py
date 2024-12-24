@@ -255,7 +255,23 @@ async def analyze_social_post(input_data: SocialMediaInput):
                 detail="Failed to save social media post to database"
             )
 
-        # Analyze text using token finder agent
+        # If the post already had a token report (meaning it was previously processed),
+        # return the existing token report
+        if hasattr(social_post, 'token_report') and social_post.token_report:
+            existing_report = social_post.token_report
+            return {
+                "id": existing_report.id,
+                "mentions_purchasable_token": existing_report.mentions_purchasable_token,
+                "token_symbol": existing_report.token_symbol,
+                "token_chain": existing_report.token_chain,
+                "token_address": existing_report.token_address,
+                "is_listed_on_dex": existing_report.is_listed_on_dex,
+                "trading_pairs": existing_report.trading_pairs,
+                "confidence_score": existing_report.confidence_score,
+                "reasoning": existing_report.reasoning
+            }
+
+        # For new posts, proceed with analysis
         token_report = await crypto_text_classifier.ainvoke({
             'messages': [input_data.text]
         })
@@ -289,7 +305,7 @@ async def analyze_social_post(input_data: SocialMediaInput):
 async def analyze_and_scout(input_data: SocialMediaInput):
     """Analyze social media post and scout for token opportunities in one step."""
     try:
-        # First analyze the social post (this creates a token report)
+        # First analyze the social post (this creates a token report or returns existing one)
         token_report = await analyze_social_post(input_data)
         
         # Only run alpha scout if:
@@ -297,6 +313,7 @@ async def analyze_and_scout(input_data: SocialMediaInput):
         # 2. The token chain is Base or Solana
         # 3. The token has an address
         # 4. There aren't multiple token reports in the past hour (which would indicate alpha_scout already ran)
+        # 5. The token report was just created (not an existing one)
         if (token_report['mentions_purchasable_token'] and
             token_report.get('token_chain') in ['Base', 'Solana'] and
             token_report.get('token_address')):
