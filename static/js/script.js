@@ -81,14 +81,15 @@ async function loadAlphaFeed(dateIndex = null) {
                             return opportunities.map(opp => {
                                 // Try to extract token name from the opportunity's message first, then fall back to report
                                 const tokenMatch = opp.message?.match(/\$([A-Z0-9_]+)/) || report.message?.match(/\$([A-Z0-9_]+)/);
+                                // Start with opp as base and only override specific fields we want to normalize
                                 return {
-                                    name: (tokenMatch?.[1] || report.token_symbol || '').toUpperCase() || 'Unknown Token',
-                                    created_at: opp.created_at || report.created_at,
-                                    chain: report.token_chain || 'Unknown',
-                                    contract_address: report.token_address,
-                                    recommendation: 'hold',
-                                    justification: opp.analysis || opp.message || report.analysis || report.message,
-                                    ...opp
+                                    ...opp,
+                                    name: (tokenMatch?.[1] || report.token_symbol || opp.name || '').toUpperCase() || 'Unknown Token',
+                                    created_at: (opp.created_at || report.created_at).replace(/^:/, ''),
+                                    chain: opp.chain || report.token_chain || 'Unknown',
+                                    contract_address: (opp.contract_address || report.token_address || '').replace(/^:/, ''),
+                                    recommendation: opp.recommendation || 'hold',
+                                    justification: opp.analysis || opp.message || report.analysis || report.message || opp.justification,
                                 };
                             });
                         }
@@ -101,14 +102,15 @@ async function loadAlphaFeed(dateIndex = null) {
                         allOpportunities = opportunities.map(opp => {
                             // Try to extract token name from the opportunity's message first, then fall back to report
                             const tokenMatch = opp.message?.match(/\$([A-Z0-9_]+)/) || data.message?.match(/\$([A-Z0-9_]+)/);
+                            // Start with opp as base and only override specific fields we want to normalize
                             return {
-                                name: (tokenMatch?.[1] || data.token_symbol || '').toUpperCase() || 'Unknown Token',
-                                created_at: opp.created_at || data.created_at,
-                                chain: data.token_chain || 'Unknown',
-                                contract_address: data.token_address,
-                                recommendation: 'hold',
-                                justification: opp.analysis || opp.message || data.analysis || data.message,
-                                ...opp
+                                ...opp,
+                                name: (tokenMatch?.[1] || data.token_symbol || opp.name || '').toUpperCase() || 'Unknown Token',
+                                created_at: (opp.created_at || data.created_at).replace(/^:/, ''),
+                                chain: opp.chain || data.token_chain || 'Unknown',
+                                contract_address: (opp.contract_address || data.token_address || '').replace(/^:/, ''),
+                                recommendation: opp.recommendation || 'hold',
+                                justification: opp.analysis || opp.message || data.analysis || data.message || opp.justification,
                             };
                         });
                     }
@@ -148,6 +150,13 @@ async function loadAlphaFeed(dateIndex = null) {
                 opp.justification = opp.justification || 'No analysis provided.';
                 opp.community_score = opp.community_score || 'N/A';
                 opp.safety_score = opp.safety_score || 'N/A';
+
+                // Only show opportunities for base or solana chains
+                const chain = opp.chain.toLowerCase();
+                if (chain !== 'base' && chain !== 'solana') {
+                    console.log('Filtering out non-base/solana chain:', opp.chain);
+                    return false;
+                }
 
                 return true;
             } catch (validationError) {

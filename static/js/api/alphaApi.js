@@ -111,12 +111,42 @@ export async function fetchAlphaReports(date = null) {
     try {
         const text = await response.text();
         // Add missing commas between properties
-        const fixedJson = text.replace(/}{"id"/g, '},{"id"')
-                             .replace(/}{"name"/g, '},{"name"')
-                             .replace(/"([^"]+)"(\d+|true|false)/g, '"$1":$2')
-                             .replace(/"([^"]+)"\[/g, '"$1":[')
-                             .replace(/}\[/g, '},[');
-        return JSON.parse(fixedJson);
+        // First parse the raw JSON to handle any potential formatting issues
+        let parsedData;
+        try {
+            parsedData = JSON.parse(text);
+        } catch (parseError) {
+            // If direct parsing fails, try to fix common JSON formatting issues
+            const fixedJson = text.replace(/}{"id"/g, '},{"id"')
+                                .replace(/}{"name"/g, '},{"name"')
+                                .replace(/"([^"]+)"(\d+|true|false)/g, '"$1":$2')
+                                .replace(/"([^"]+)"\[/g, '"$1":[')
+                                .replace(/}\[/g, '},[');
+            parsedData = JSON.parse(fixedJson);
+        }
+
+        // Clean up any colons in contract addresses
+        const cleanData = (data) => {
+            if (Array.isArray(data)) {
+                return data.map(item => cleanData(item));
+            }
+            if (typeof data === 'object' && data !== null) {
+                const cleaned = {};
+                for (const [key, value] of Object.entries(data)) {
+                    if (key === 'contract_address' && typeof value === 'string') {
+                        cleaned[key] = value.replace(/^:/, '');
+                    } else if (typeof value === 'object' && value !== null) {
+                        cleaned[key] = cleanData(value);
+                    } else {
+                        cleaned[key] = value;
+                    }
+                }
+                return cleaned;
+            }
+            return data;
+        };
+
+        return cleanData(parsedData);
     } catch (error) {
         console.error('Error parsing JSON:', error);
         throw new Error(`Failed to parse API response: ${error.message}`);
