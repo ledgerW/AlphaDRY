@@ -26,7 +26,68 @@ def populate_dev_data():
             session.add(report)
             session.flush()
 
-            # Create sample token opportunities
+            # Create sample token reports first
+            token_report_1 = TokenReportDB(
+                mentions_purchasable_token=True,
+                token_symbol="BASE1",
+                token_chain="base",
+                token_address="0x1234567890abcdef",
+                is_listed_on_dex=True,
+                trading_pairs=["BASE1/ETH", "BASE1/USDC"],
+                confidence_score=8,
+                reasoning="Sample Base token analysis"
+            )
+            session.add(token_report_1)
+
+            token_report_2 = TokenReportDB(
+                mentions_purchasable_token=True,
+                token_symbol="SOL1",
+                token_chain="solana",
+                token_address="SOL123456789",
+                is_listed_on_dex=True,
+                trading_pairs=["SOL1/SOL", "SOL1/USDC"],
+                confidence_score=7,
+                reasoning="Sample Solana token analysis"
+            )
+            session.add(token_report_2)
+            session.flush()  # Flush to get IDs
+
+            # Create social media posts for each token report
+            social_post_1 = SocialMediaPostDB(
+                source="warpcast",
+                post_id="base123",
+                author_id="user456",
+                author_username="base_enthusiast",
+                author_display_name="Base Enthusiast",
+                text="Check out this new Base token $BASE1 0x1234567890abcdef",
+                original_timestamp=datetime.utcnow(),
+                timestamp=datetime.utcnow(),
+                reactions_count=15,
+                replies_count=5,
+                reposts_count=3,
+                raw_data={"platform": "warpcast"},
+                token_report_id=token_report_1.id
+            )
+            session.add(social_post_1)
+
+            social_post_2 = SocialMediaPostDB(
+                source="warpcast",
+                post_id="sol123",
+                author_id="user789",
+                author_username="sol_enthusiast",
+                author_display_name="Solana Enthusiast",
+                text="New Solana gem $SOL1 SOL123456789",
+                original_timestamp=datetime.utcnow(),
+                timestamp=datetime.utcnow(),
+                reactions_count=20,
+                replies_count=8,
+                reposts_count=5,
+                raw_data={"platform": "warpcast"},
+                token_report_id=token_report_2.id
+            )
+            session.add(social_post_2)
+
+            # Create sample token opportunities with both relationships
             opportunities = [
                 TokenOpportunityDB(
                     name="Sample Token 1",
@@ -38,7 +99,8 @@ def populate_dev_data():
                     justification="Strong community and solid fundamentals",
                     sources=["source1.com", "source2.com"],
                     recommendation="Buy",
-                    report_id=report.id
+                    report_id=report.id,
+                    token_report_id=token_report_1.id  # Link to token report
                 ),
                 TokenOpportunityDB(
                     name="Sample Token 2",
@@ -50,7 +112,8 @@ def populate_dev_data():
                     justification="Innovative technology with growing adoption",
                     sources=["source3.com", "source4.com"],
                     recommendation="Hold",
-                    report_id=report.id
+                    report_id=report.id,
+                    token_report_id=token_report_2.id  # Link to token report
                 )
             ]
             for opp in opportunities:
@@ -83,11 +146,11 @@ def populate_dev_data():
             session.rollback()
             print(f"Error creating warpcast: {e}")
 
-    # Create sample social media post and token report
+    # Create sample social media posts and token reports
     with get_session() as session:
         try:
-            # Create token report
-            token_report = TokenReportDB(
+            # Create sample token report
+            sample_token_report = TokenReportDB(
                 mentions_purchasable_token=True,
                 token_symbol="SAMPLE",
                 token_chain="ethereum",
@@ -97,11 +160,11 @@ def populate_dev_data():
                 confidence_score=8,
                 reasoning="Sample token analysis"
             )
-            session.add(token_report)
+            session.add(sample_token_report)
             session.flush()
 
-            # Create social media post
-            social_post = SocialMediaPostDB(
+            # Create sample social media post
+            sample_social_post = SocialMediaPostDB(
                 source="warpcast",
                 post_id="sample123",
                 author_id="user123",
@@ -114,9 +177,68 @@ def populate_dev_data():
                 replies_count=2,
                 reposts_count=1,
                 raw_data={"sample": "data"},
-                token_report_id=token_report.id
+                token_report_id=sample_token_report.id
             )
-            session.add(social_post)
+            session.add(sample_social_post)
+
+            # Create SNEGEN token report
+            snegen_token_report = TokenReportDB(
+                mentions_purchasable_token=True,
+                token_symbol="SNEGEN",
+                token_chain="solana",
+                token_address="SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj",
+                is_listed_on_dex=True,
+                trading_pairs=["SNEGEN/SOL", "SNEGEN/USDC"],
+                confidence_score=9,
+                reasoning="New Solana meme token with strong community engagement and growing trading volume"
+            )
+            session.add(snegen_token_report)
+            session.flush()
+
+            # Create SNEGEN social media post
+            snegen_social_post = SocialMediaPostDB(
+                source="warpcast",
+                post_id="snegen_post_123",
+                author_id="snegen_user",
+                author_username="snegen_enthusiast",
+                author_display_name="SNEGEN Enthusiast",
+                text="$SNEGEN is taking off! The first meme token built for Solana's AI ecosystem. Already listed on multiple DEXes with growing liquidity. SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj",
+                original_timestamp=datetime.utcnow(),
+                timestamp=datetime.utcnow(),
+                reactions_count=25,
+                replies_count=12,
+                reposts_count=8,
+                raw_data={"platform": "warpcast", "verified": True},
+                token_report_id=snegen_token_report.id
+            )
+            session.add(snegen_social_post)
+
+            # Create SNEGEN alpha report
+            snegen_report = AlphaReportDB(
+                is_relevant=True,
+                analysis="SNEGEN shows strong potential as the first meme token built for Solana's AI ecosystem. The token has gained significant traction in the Solana ecosystem, particularly among AI and meme token enthusiasts. With its growing liquidity and strong community engagement, SNEGEN represents an interesting opportunity in the intersection of AI and meme tokens on Solana.",
+                message="Analysis of SNEGEN token opportunity",
+                created_at=datetime.utcnow()
+            )
+            session.add(snegen_report)
+            session.flush()
+
+            # Add SNEGEN token opportunity linked to both alpha report and token report
+            snegen_opportunity = TokenOpportunityDB(
+                name="SNEGEN",
+                chain=Chain.SOLANA,
+                contract_address="SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj",
+                market_cap=750000.0,
+                community_score=8,
+                safety_score=7,
+                justification="First meme token focused on Solana's AI ecosystem with strong community growth. The project has shown impressive early traction with active trading on multiple DEXes and growing social media presence. Community engagement metrics are strong, and the unique positioning in the AI narrative space provides potential growth opportunities.",
+                sources=["warpcast.com", "birdeye.so", "solscan.io"],
+                recommendation="Buy",
+                report_id=snegen_report.id,
+                token_report_id=snegen_token_report.id
+            )
+            session.add(snegen_opportunity)
+            
             session.commit()
         except Exception as e:
             session.rollback()

@@ -28,6 +28,7 @@
             margin-bottom: 20px;
             border-radius: 10px;
             animation: glow 2s infinite alternate;
+            text-align: center;
         }
 
         .token-name {
@@ -39,6 +40,7 @@
         .token-chain {
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
         }
 
@@ -127,16 +129,31 @@
                 const reports = await fetchAlphaReports();
                 
                 // Filter opportunities for this token address
-                const tokenOpportunities = reports.flatMap(report => 
-                    report.opportunities.filter(opp => 
-                        opp.contract_address === tokenAddress
-                    ).map(opp => ({
-                        opportunity: opp,
-                        report: report
-                    }))
-                );
+                console.log('Raw reports:', reports);
+                
+                const tokenOpportunities = reports.flatMap(report => {
+                    console.log('Processing report:', report);
+                    return report.opportunities.filter(opp => {
+                        console.log('Checking opportunity:', opp);
+                        console.log('Comparing addresses:', opp.contract_address, tokenAddress);
+                        return opp.contract_address === tokenAddress;
+                    }).map(opp => {
+                        console.log('Matched opportunity:', opp);
+                        console.log('Token report:', opp.token_report);
+                        if (opp.token_report) {
+                            console.log('Social media post:', opp.token_report.social_media_post);
+                        }
+                        return {
+                            opportunity: opp,
+                            report: report
+                        };
+                    });
+                });
+                
+                console.log('Filtered opportunities:', tokenOpportunities);
 
-                // Create grid rows for each opportunity
+                // Clear loading message and create grid rows for each opportunity
+                tokenGrid.innerHTML = ''; // Clear the loading message
                 tokenOpportunities.forEach(({ opportunity, report }) => {
                     const row = document.createElement('div');
                     row.className = 'grid-row';
@@ -165,10 +182,28 @@
                     // Social Post
                     const socialDiv = document.createElement('div');
                     socialDiv.className = 'social-post';
-                    socialDiv.innerHTML = `
-                        <h3>Social Post</h3>
-                        <p>${escapeHtml(report.message)}</p>
-                    `;
+                    
+                    // Check if token report and social media post exist
+                    console.log('Checking social post for opportunity:', opportunity);
+                    console.log('Token report:', opportunity.token_report);
+                    
+                    if (opportunity.token_report && opportunity.token_report.social_media_post) {
+                        const socialPost = opportunity.token_report.social_media_post;
+                        console.log('Found social post:', socialPost);
+                        socialDiv.innerHTML = `
+                            <h3>Social Post</h3>
+                            <p><strong>Source:</strong> ${escapeHtml(socialPost.source)}</p>
+                            <p><strong>Author:</strong> ${escapeHtml(socialPost.author_display_name)}</p>
+                            <p><strong>Message:</strong><br>${escapeHtml(socialPost.text)}</p>
+                            <p><strong>Posted:</strong> ${new Date(socialPost.timestamp).toLocaleString()}</p>
+                        `;
+                    } else {
+                        console.log('No social post found for opportunity');
+                        socialDiv.innerHTML = `
+                            <h3>Social Post</h3>
+                            <p>No social media post data available</p>
+                        `;
+                    }
                     
                     row.appendChild(oppDiv);
                     row.appendChild(reportDiv);

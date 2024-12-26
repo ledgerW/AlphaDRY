@@ -19,6 +19,7 @@ class TokenOpportunity(BaseModel):
     sources: List[str]
     recommendation: str
     created_at: datetime
+    token_report: Optional[Dict[str, Any]] = None
 
     class Config:
         json_encoders = {
@@ -52,8 +53,8 @@ from agents.models import TokenAlpha, Chain
 from agents.tools import IsTokenReport
 from database import (
     create_alpha_report, get_all_alpha_reports, TokenOpportunityDB, 
-    AlphaReportDB, TokenReportDB, get_session, create_social_media_post,
-    create_token_report
+    AlphaReportDB, TokenReportDB, SocialMediaPostDB, get_session, 
+    create_social_media_post, create_token_report
 )
 from db.operations.alpha import has_recent_token_report
 
@@ -96,8 +97,18 @@ async def get_alpha_reports(date: Optional[str] = None):
     """Get all alpha reports from the database."""
     try:
         with get_session() as session:
-            # Use joinedload to eagerly load the opportunities relationship
-            query = session.query(AlphaReportDB).options(joinedload(AlphaReportDB.opportunities))
+            # Use joinedload to eagerly load the opportunities and their related token_reports and social_media_posts
+            query = session.query(AlphaReportDB).options(
+                joinedload(AlphaReportDB.opportunities)
+                .joinedload(TokenOpportunityDB.token_report)
+                .joinedload(TokenReportDB.social_media_post)
+                .load_only(
+                    SocialMediaPostDB.source,
+                    SocialMediaPostDB.author_display_name,
+                    SocialMediaPostDB.text,
+                    SocialMediaPostDB.timestamp
+                )
+            )
             
             if date:
                 # Convert date string to datetime
@@ -131,7 +142,15 @@ async def get_alpha_reports(date: Optional[str] = None):
                             justification=opp.justification,
                             sources=opp.sources,
                             recommendation=opp.recommendation,
-                            created_at=opp.created_at
+                            created_at=opp.created_at,
+                            token_report={
+                                "social_media_post": {
+                                    "source": opp.token_report.social_media_post.source if opp.token_report and opp.token_report.social_media_post else None,
+                                    "author_display_name": opp.token_report.social_media_post.author_display_name if opp.token_report and opp.token_report.social_media_post else None,
+                                    "text": opp.token_report.social_media_post.text if opp.token_report and opp.token_report.social_media_post else None,
+                                    "timestamp": opp.token_report.social_media_post.timestamp if opp.token_report and opp.token_report.social_media_post else None
+                                } if opp.token_report and opp.token_report.social_media_post else None
+                            } if opp.token_report else None
                         )
                         for opp in report.opportunities
                     ]
