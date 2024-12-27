@@ -24,73 +24,65 @@ CHAIN_VALUES = ('ethereum', 'polygon', 'arbitrum', 'optimism', 'base', 'solana')
 def upgrade() -> None:
     # Fix chain column in both dev and prod tables
     for prefix in ['dev_', 'prod_']:
-        try:
-            table_name = f"{prefix}token_opportunities"
-            enum_name = f'{prefix}chain_type'
-            
-            # Create connection
-            conn = op.get_bind()
-            
-            # Check if enum type exists
-            enum_exists = conn.execute(
-                text("SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = :enum_name)"),
-                {"enum_name": enum_name}
-            ).scalar()
-            
-            if not enum_exists:
-                # Create enum type with lowercase values
-                op.execute(
-                    text(f'CREATE TYPE {enum_name} AS ENUM {str(CHAIN_VALUES)}')
-                )
-            else:
-                # If enum exists, try to update it to include all values
-                # First get current values
-                current_values = conn.execute(
-                    text("""
-                        SELECT e.enumlabel
-                        FROM pg_enum e
-                        JOIN pg_type t ON e.enumtypid = t.oid
-                        WHERE t.typname = :enum_name
-                    """),
-                    {"enum_name": enum_name}
-                ).scalars().all()
-                
-                # Add any missing values
-                for value in CHAIN_VALUES:
-                    if value not in current_values:
-                        try:
-                            op.execute(
-                                text(f"ALTER TYPE {enum_name} ADD VALUE '{value}'")
-                            )
-                        except Exception as e:
-                            print(f"Warning: Could not add enum value {value}: {str(e)}")
-            
-            # Check if column exists
-            column_exists = conn.execute(
+        table_name = f"{prefix}token_opportunities"
+        enum_name = f'{prefix}chain_type'
+        
+        # Create connection
+        conn = op.get_bind()
+        
+        # Check if enum type exists
+        enum_exists = conn.execute(
+            text("SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = :enum_name)"),
+            {"enum_name": enum_name}
+        ).scalar()
+        
+        if not enum_exists:
+            # Create enum type with lowercase values
+            op.execute(
+                text(f'CREATE TYPE {enum_name} AS ENUM {str(CHAIN_VALUES)}')
+            )
+        else:
+            # If enum exists, try to update it to include all values
+            # First get current values
+            current_values = conn.execute(
                 text("""
-                SELECT EXISTS (
-                    SELECT 1 
-                    FROM information_schema.columns 
-                    WHERE table_name = :table_name AND column_name = 'chain'
-                )
+                    SELECT e.enumlabel
+                    FROM pg_enum e
+                    JOIN pg_type t ON e.enumtypid = t.oid
+                    WHERE t.typname = :enum_name
                 """),
-                {"table_name": table_name}
-            ).scalar()
+                {"enum_name": enum_name}
+            ).scalars().all()
             
-            if not column_exists:
-                # Add chain column
-                op.add_column(
-                    table_name,
-                    sa.Column(
-                        'chain',
-                        postgresql.ENUM(*CHAIN_VALUES, name=enum_name),
-                        nullable=True
+            # Add any missing values
+            for value in CHAIN_VALUES:
+                if value not in current_values:
+                    op.execute(
+                        text(f"ALTER TYPE {enum_name} ADD VALUE '{value}'")
                     )
+        
+        # Check if column exists
+        column_exists = conn.execute(
+            text("""
+            SELECT EXISTS (
+                SELECT 1 
+                FROM information_schema.columns 
+                WHERE table_name = :table_name AND column_name = 'chain'
+            )
+            """),
+            {"table_name": table_name}
+        ).scalar()
+        
+        if not column_exists:
+            # Add chain column
+            op.add_column(
+                table_name,
+                sa.Column(
+                    'chain',
+                    postgresql.ENUM(*CHAIN_VALUES, name=enum_name),
+                    nullable=True
                 )
-        except Exception as e:
-            print(f"Warning: Error processing {prefix} tables: {str(e)}")
-            # Continue with next prefix rather than failing
-            continue
+            )
 
 
 def downgrade() -> None:
