@@ -17,6 +17,7 @@ DO $$
 DECLARE
     missing_tables text[];
     table_issues text[];
+    column_exists boolean;
 BEGIN
     -- Check which required tables exist
     SELECT ARRAY_AGG(t) INTO missing_tables
@@ -47,5 +48,22 @@ BEGIN
     ) THEN
         RAISE NOTICE 'Chain enum type is missing';
     END IF;
+
+    -- Check if token_id columns already exist
+    SELECT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'prod_token_reports' 
+        AND column_name = 'token_id'
+    ) INTO column_exists;
+    
+    IF column_exists THEN
+        RAISE NOTICE 'WARNING: token_id column already exists in prod_token_reports';
+    END IF;
+
+    -- Check alembic version
+    RAISE NOTICE 'Current alembic version:';
+    SELECT version_num FROM alembic_version;
 END
 $$;
