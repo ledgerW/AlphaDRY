@@ -7,6 +7,7 @@ while maintaining backward compatibility with the original database.py.
 from .connection import get_engine, get_env_prefix
 from .models.base import get_session
 from .models.alpha import AlphaReportDB, TokenOpportunityDB
+from .models.token import TokenDB
 from .models.social import SocialMediaPostDB, TokenReportDB
 from .models.warpcast import get_model
 from .operations.alpha import (
@@ -45,6 +46,7 @@ __all__ = [
     'TokenOpportunityDB',
     'SocialMediaPostDB',
     'TokenReportDB',
+    'TokenDB',
     'get_model',
     
     # Operations

@@ -1,4 +1,5 @@
 from .base import *
+from .token import TokenDB
 
 class SocialMediaPostDB(SQLModel, table=True):
     """Database model for social media posts"""
@@ -49,3 +50,7 @@ class TokenReportDB(SQLModel, table=True):
             "lazy": "joined"
         }
     )
+
+    # Relationship with Token
+    token_id: Optional[int] = Field(default=None, foreign_key=f"{get_env_prefix()}tokens.id")
+    token: Optional["TokenDB"] = Relationship(back_populates="token_reports")

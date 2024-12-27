@@ -8,6 +8,12 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from sqlalchemy.orm import joinedload
 
+class TokenData(BaseModel):
+    symbol: str
+    name: str
+    chain: str
+    address: Optional[str] = None
+
 class TokenOpportunity(BaseModel):
     name: str
     chain: str
@@ -19,6 +25,7 @@ class TokenOpportunity(BaseModel):
     sources: List[str]
     recommendation: str
     created_at: datetime
+    token: Optional[TokenData] = None
     token_report: Optional[Dict[str, Any]] = None
 
     class Config:
@@ -53,7 +60,7 @@ from agents.models import TokenAlpha, Chain
 from agents.tools import IsTokenReport
 from database import (
     create_alpha_report, get_all_alpha_reports, TokenOpportunityDB, 
-    AlphaReportDB, TokenReportDB, SocialMediaPostDB, get_session, 
+    AlphaReportDB, TokenReportDB, SocialMediaPostDB, TokenDB, get_session, 
     create_social_media_post, create_token_report
 )
 from db.operations.alpha import has_recent_token_report
@@ -100,6 +107,8 @@ async def get_alpha_reports(date: Optional[str] = None):
             # Use joinedload to eagerly load the opportunities and their related token_reports and social_media_posts
             query = session.query(AlphaReportDB).options(
                 joinedload(AlphaReportDB.opportunities)
+                .joinedload(TokenOpportunityDB.token),
+                joinedload(AlphaReportDB.opportunities)
                 .joinedload(TokenOpportunityDB.token_report)
                 .joinedload(TokenReportDB.social_media_post)
                 .load_only(
@@ -143,6 +152,12 @@ async def get_alpha_reports(date: Optional[str] = None):
                             sources=opp.sources,
                             recommendation=opp.recommendation,
                             created_at=opp.created_at,
+                            token=TokenData(
+                                symbol=opp.token.symbol,
+                                name=opp.token.name,
+                                chain=str(opp.token.chain),
+                                address=opp.token.address
+                            ) if opp.token else None,
                             token_report={
                                 "social_media_post": {
                                     "source": opp.token_report.social_media_post.source if opp.token_report and opp.token_report.social_media_post else None,
@@ -396,10 +411,49 @@ async def analyze_and_scout(input_data: SocialMediaInput):
                 reasoning=token_report['reasoning']
             )
             
-            # Call the multi_agent_alpha_scout endpoint with token_report_id
-            token_alpha = await get_multi_agent_alpha_scout(token_report_model, token_report['id'])
-            
-            return token_alpha
+            # Create or get existing token
+            token = None
+            try:
+                # Try to find existing token by chain and address
+                token = session.query(TokenDB).filter(
+                    TokenDB.chain == token_report['token_chain'].upper(),
+                    TokenDB.address == token_report['token_address']
+                ).first()
+                
+                if not token:
+                    # Create new token if not found
+                    token = TokenDB(
+                        symbol=token_report['token_symbol'],
+                        name=token_report['token_symbol'],  # Use symbol as name initially
+                        chain=token_report['token_chain'].upper(),
+                        address=token_report['token_address']
+                    )
+                    session.add(token)
+                    session.flush()  # Get token ID
+                
+                # Update token_report with token_id
+                db_token_report = session.query(TokenReportDB).get(token_report['id'])
+                if db_token_report:
+                    db_token_report.token_id = token.id
+                    session.flush()
+                
+                # Call the multi_agent_alpha_scout endpoint with token_report_id
+                token_alpha = await get_multi_agent_alpha_scout(token_report_model, token_report['id'])
+                
+                # Update token opportunity with token_id
+                if token_alpha:
+                    opportunity = session.query(TokenOpportunityDB).filter(
+                        TokenOpportunityDB.token_report_id == token_report['id']
+                    ).first()
+                    if opportunity:
+                        opportunity.token_id = token.id
+                        session.flush()
+                
+                return token_alpha
+                
+            except Exception as e:
+                print(f"Error creating/linking token: {str(e)}")
+                raise
     
         # If no purchasable token found, return None
         return None

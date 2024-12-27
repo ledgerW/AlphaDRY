@@ -16,6 +16,7 @@ from db import (
     TokenOpportunityDB,
     SocialMediaPostDB,
     TokenReportDB,
+    TokenDB,
     get_model,
     
     # Operations
@@ -45,6 +46,7 @@ __all__ = [
     'TokenOpportunityDB',
     'SocialMediaPostDB',
     'TokenReportDB',
+    'TokenDB',
     'get_model',
     'create_alpha_report',
     'get_alpha_report',

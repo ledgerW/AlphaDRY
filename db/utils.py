@@ -1,9 +1,10 @@
 from datetime import datetime
 from sqlmodel import SQLModel
 from sqlalchemy import text
-from typing import Dict, Any
+from typing import Dict, Any, List
 from .connection import get_engine, get_env_prefix, tables_exist
 from .models.alpha import AlphaReportDB, TokenOpportunityDB
+from .models.token import TokenDB
 from .models.social import SocialMediaPostDB, TokenReportDB
 from .models.warpcast import get_model
 from .models.base import get_session
@@ -26,7 +27,25 @@ def populate_dev_data():
             session.add(report)
             session.flush()
 
-            # Create sample token reports first
+            # Create sample tokens first
+            token_1 = TokenDB(
+                symbol="BASE1",
+                name="Base Token 1",
+                chain=Chain.BASE,
+                address="0x1234567890abcdef"
+            )
+            session.add(token_1)
+
+            token_2 = TokenDB(
+                symbol="SOL1",
+                name="Solana Token 1",
+                chain=Chain.SOLANA,
+                address="SOL123456789"
+            )
+            session.add(token_2)
+            session.flush()  # Get IDs for the tokens
+
+            # Create sample token reports
             token_report_1 = TokenReportDB(
                 mentions_purchasable_token=True,
                 token_symbol="BASE1",
@@ -35,7 +54,8 @@ def populate_dev_data():
                 is_listed_on_dex=True,
                 trading_pairs=["BASE1/ETH", "BASE1/USDC"],
                 confidence_score=8,
-                reasoning="Sample Base token analysis"
+                reasoning="Sample Base token analysis",
+                token_id=token_1.id
             )
             session.add(token_report_1)
 
@@ -47,7 +67,8 @@ def populate_dev_data():
                 is_listed_on_dex=True,
                 trading_pairs=["SOL1/SOL", "SOL1/USDC"],
                 confidence_score=7,
-                reasoning="Sample Solana token analysis"
+                reasoning="Sample Solana token analysis",
+                token_id=token_2.id
             )
             session.add(token_report_2)
             session.flush()  # Flush to get IDs
@@ -100,7 +121,8 @@ def populate_dev_data():
                     sources=["source1.com", "source2.com"],
                     recommendation="Buy",
                     report_id=report.id,
-                    token_report_id=token_report_1.id  # Link to token report
+                    token_report_id=token_report_1.id,  # Link to token report
+                    token_id=token_1.id  # Link to token
                 ),
                 TokenOpportunityDB(
                     name="Sample Token 2",
@@ -113,7 +135,8 @@ def populate_dev_data():
                     sources=["source3.com", "source4.com"],
                     recommendation="Hold",
                     report_id=report.id,
-                    token_report_id=token_report_2.id  # Link to token report
+                    token_report_id=token_report_2.id,  # Link to token report
+                    token_id=token_2.id  # Link to token
                 )
             ]
             for opp in opportunities:
@@ -149,6 +172,16 @@ def populate_dev_data():
     # Create sample social media posts and token reports
     with get_session() as session:
         try:
+            # Create sample token
+            sample_token = TokenDB(
+                symbol="SAMPLE",
+                name="Sample Token",
+                chain=Chain.ETHEREUM,
+                address="0xsample"
+            )
+            session.add(sample_token)
+            session.flush()
+
             # Create sample token report
             sample_token_report = TokenReportDB(
                 mentions_purchasable_token=True,
@@ -158,7 +191,8 @@ def populate_dev_data():
                 is_listed_on_dex=True,
                 trading_pairs=["SAMPLE/ETH", "SAMPLE/USDT"],
                 confidence_score=8,
-                reasoning="Sample token analysis"
+                reasoning="Sample token analysis",
+                token_id=sample_token.id
             )
             session.add(sample_token_report)
             session.flush()
@@ -181,6 +215,16 @@ def populate_dev_data():
             )
             session.add(sample_social_post)
 
+            # Create SNEGEN token
+            snegen_token = TokenDB(
+                symbol="SNEGEN",
+                name="SNEGEN",
+                chain=Chain.SOLANA,
+                address="SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj"
+            )
+            session.add(snegen_token)
+            session.flush()
+
             # Create SNEGEN token report
             snegen_token_report = TokenReportDB(
                 mentions_purchasable_token=True,
@@ -190,7 +234,8 @@ def populate_dev_data():
                 is_listed_on_dex=True,
                 trading_pairs=["SNEGEN/SOL", "SNEGEN/USDC"],
                 confidence_score=9,
-                reasoning="New Solana meme token with strong community engagement and growing trading volume"
+                reasoning="New Solana meme token with strong community engagement and growing trading volume",
+                token_id=snegen_token.id
             )
             session.add(snegen_token_report)
             session.flush()
@@ -235,7 +280,8 @@ def populate_dev_data():
                 sources=["warpcast.com", "birdeye.so", "solscan.io"],
                 recommendation="Buy",
                 report_id=snegen_report.id,
-                token_report_id=snegen_token_report.id
+                token_report_id=snegen_token_report.id,
+                token_id=snegen_token.id
             )
             session.add(snegen_opportunity)
             
@@ -257,6 +303,7 @@ def reset_db():
         conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}warpcasts CASCADE"))
         conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}social_media_posts CASCADE"))
         conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}token_reports CASCADE"))
+        conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}tokens CASCADE"))
         
         # Only drop the enum type if we're in dev environment
         if env_prefix == "dev_":

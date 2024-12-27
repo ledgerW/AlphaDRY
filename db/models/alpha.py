@@ -2,6 +2,8 @@ from .base import *
 from agents.models import Chain
 from pydantic import validator
 from sqlalchemy import String
+from .social import TokenReportDB
+from .token import TokenDB
 
 class TokenOpportunityDB(SQLModel, table=True):
     """Database model for token investment opportunities"""
@@ -26,6 +28,10 @@ class TokenOpportunityDB(SQLModel, table=True):
     # Relationship with TokenReport
     token_report_id: Optional[int] = Field(default=None, foreign_key=f"{get_env_prefix()}token_reports.id")
     token_report: Optional["TokenReportDB"] = Relationship(back_populates="opportunities")
+    
+    # Relationship with Token
+    token_id: Optional[int] = Field(default=None, foreign_key=f"{get_env_prefix()}tokens.id")
+    token: Optional["TokenDB"] = Relationship(back_populates="token_opportunities")
 
     @validator('chain', pre=True)
     def validate_chain(cls, v):
