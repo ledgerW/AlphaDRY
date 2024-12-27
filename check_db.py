@@ -34,9 +34,25 @@ def sync_prod_tables():
             DROP TABLE IF EXISTS prod_alpha_reports CASCADE;
             DROP TABLE IF EXISTS prod_social_media_posts CASCADE;
             DROP TABLE IF EXISTS prod_token_reports CASCADE;
+            DROP TABLE IF EXISTS prod_tokens CASCADE;
         """)
         
         # Create prod tables by copying dev table structures
+        print("Creating prod_tokens table...")
+        cur.execute("""
+            CREATE TABLE prod_tokens (
+                id INTEGER PRIMARY KEY,
+                symbol VARCHAR NOT NULL,
+                name VARCHAR NOT NULL,
+                chain VARCHAR NOT NULL,
+                address VARCHAR,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX idx_prod_tokens_symbol ON prod_tokens(symbol);
+            CREATE INDEX idx_prod_tokens_address ON prod_tokens(address);
+            CREATE UNIQUE INDEX uq_prod_tokens_chain_address ON prod_tokens(chain, address);
+        """)
+
         print("Creating prod_alpha_reports table...")
         cur.execute("""
             CREATE TABLE prod_alpha_reports (LIKE dev_alpha_reports INCLUDING ALL);
@@ -76,7 +92,15 @@ def sync_prod_tables():
             REFERENCES prod_token_reports(id)
             ON DELETE SET NULL;
         """)
-        
+
+        # Token opportunities -> Tokens
+        cur.execute("""
+            ALTER TABLE prod_token_opportunities 
+            ADD CONSTRAINT fk_prod_token_opportunities_token 
+            FOREIGN KEY (token_id) 
+            REFERENCES prod_tokens(id)
+            ON DELETE SET NULL;
+        """)
         # Social media posts -> Token reports
         cur.execute("""
             ALTER TABLE prod_social_media_posts 

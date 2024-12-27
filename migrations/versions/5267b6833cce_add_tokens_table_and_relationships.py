@@ -21,7 +21,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     prefix = get_env_prefix()
     
-    # Create tokens table
+    # Step 1: Create tokens table
     op.create_table(
         f'{prefix}tokens',
         Column('id', Integer, primary_key=True),
@@ -33,16 +33,34 @@ def upgrade() -> None:
         UniqueConstraint('chain', 'address', name=f'uq_{prefix}token_chain_address')
     )
 
-    # Add token_id to token_reports
+    # Step 2: Add token_id columns without foreign key constraints
     op.add_column(
         f'{prefix}token_reports',
-        Column('token_id', Integer, ForeignKey(f'{prefix}tokens.id'), nullable=True)
+        Column('token_id', Integer, nullable=True)
     )
     
-    # Add token_id to token_opportunities
     op.add_column(
         f'{prefix}token_opportunities',
-        Column('token_id', Integer, ForeignKey(f'{prefix}tokens.id'), nullable=True)
+        Column('token_id', Integer, nullable=True)
+    )
+
+    # Step 3: Add foreign key constraints
+    op.create_foreign_key(
+        f'fk_{prefix}token_reports_token',
+        f'{prefix}token_reports',
+        f'{prefix}tokens',
+        ['token_id'],
+        ['id'],
+        ondelete='SET NULL'
+    )
+
+    op.create_foreign_key(
+        f'fk_{prefix}token_opportunities_token',
+        f'{prefix}token_opportunities',
+        f'{prefix}tokens',
+        ['token_id'],
+        ['id'],
+        ondelete='SET NULL'
     )
 
 
