@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'fix_token_relationships'
-down_revision: str = 'drop_warpcasts_tables'
+down_revision: str = '5267b6833cce'  # Make this run after tokens table creation
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

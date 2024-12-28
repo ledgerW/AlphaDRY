@@ -57,6 +57,7 @@ if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
     pip install -r requirements.txt &&
     pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql &&
     psql $DATABASE_URL < db/deployment_safety.sql &&
+    alembic stamp drop_warpcasts_tables &&  # Reset to before the tokens migration
     alembic upgrade head &&
     uvicorn main:app --host 0.0.0.0 --port 80
 else
