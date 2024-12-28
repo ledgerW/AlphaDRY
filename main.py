@@ -42,6 +42,13 @@ async def read_token(request: Request):
         "api_key": os.getenv("API_KEY", "")
     })
 
+@app.get("/tokens")
+async def read_tokens(request: Request):
+    return templates.TemplateResponse("tokens.html", {
+        "request": request,
+        "api_key": os.getenv("API_KEY", "")
+    })
+
 
 if __name__ == "__main__":
     # Use port 80 for deployment or 2024 as fallback

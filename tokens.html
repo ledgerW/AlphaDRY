@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token List</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        .token-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .token-card {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            padding: 15px;
+            animation: glow 2s infinite alternate;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .token-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+        }
+
+        .token-name {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .token-chain {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 255, 136, 0.1);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .chain-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        .token-details {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .token-symbol {
+            color: rgba(0, 255, 136, 0.9);
+            font-size: 0.9em;
+        }
+
+        .token-address {
+            font-family: monospace;
+            font-size: 0.85em;
+            word-break: break-all;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .token-date {
+            font-size: 0.85em;
+            color: rgba(0, 255, 136, 0.7);
+            margin-top: auto;
+        }
+
+        .loading {
+            text-align: center;
+            grid-column: 1 / -1;
+            padding: 20px;
+            color: #00ff88;
+        }
+
+        .error-message {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #ff4444;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            grid-column: 1 / -1;
+            animation: glow 2s infinite alternate;
+            color: #ff4444;
+        }
+
+        .token-link {
+            color: inherit;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .token-link {
+            display: block;  /* Make the link fill the card space */
+        }
+
+        .token-link:hover .token-card {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 255, 136, 0.2);
+            background: rgba(0, 255, 136, 0.03);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Token List 💎</h1>
+        <div class="token-grid">
+            <!-- Tokens will be dynamically inserted here -->
+            <div class="loading">Loading tokens...</div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchTokens() {
+            try {
+                const response = await fetch('/api/tokens');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch tokens');
+                }
+                const tokens = await response.json();
+                displayTokens(tokens);
+            } catch (error) {
+                console.error('Error:', error);
+                document.querySelector('.token-grid').innerHTML = `
+                    <div class="error-message">
+                        <p>Error loading tokens. Please try again later.</p>
+                    </div>
+                `;
+            }
+        }
+
+        function displayTokens(tokens) {
+            if (!tokens || tokens.length === 0) {
+                document.querySelector('.token-grid').innerHTML = `
+                    <div class="error-message">
+                        <p>No tokens found.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const tokenGrid = document.querySelector('.token-grid');
+            tokenGrid.innerHTML = tokens.map(token => `
+                <a href="/token?address=${encodeURIComponent(token.address)}" class="token-link">
+                    <div class="token-card">
+                        <div class="token-header">
+                            <div class="token-name">${escapeHtml(token.name)}</div>
+                            <div class="token-chain">
+                                <img src="/static/${token.chain === 'solana' ? 'solana_icon.svg' : 'base_icon.svg'}" 
+                                     alt="${escapeHtml(token.chain)} icon" 
+                                     class="chain-icon" />
+                                ${escapeHtml(token.chain)}
+                            </div>
+                        </div>
+                        <div class="token-details">
+                            <div class="token-symbol">${escapeHtml(token.symbol)}</div>
+                            <div class="token-address">${escapeHtml(token.address)}</div>
+                        </div>
+                        <div class="token-date">
+                            ${new Date(token.created_at).toLocaleDateString()}
+                        </div>
+                    </div>
+                </a>
+            `).join('');
+        }
+
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Load tokens when the page loads
+        fetchTokens();
+    </script>
+</body>
+</html>

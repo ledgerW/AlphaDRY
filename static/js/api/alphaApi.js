@@ -101,6 +101,15 @@ export function showError(message) {
 }
 
 // Function to fetch alpha reports
+// Function to fetch a specific token's details
+export async function fetchToken(address) {
+    const response = await fetch(`/api/token/${encodeURIComponent(address)}`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch token: ${response.status}`);
+    }
+    return response.json();
+}
+
 export async function fetchAlphaReports(date = null) {
     const url = date ? `/api/alpha_reports?date=${date}` : '/api/alpha_reports';
     const response = await fetch(url);

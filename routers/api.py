@@ -63,6 +63,9 @@ from database import (
     AlphaReportDB, TokenReportDB, SocialMediaPostDB, TokenDB, get_session, 
     create_social_media_post, create_token_report
 )
+from sqlalchemy import desc
+
+
 from db.operations.alpha import has_recent_token_report
 
 load_dotenv()
@@ -195,6 +198,167 @@ async def get_alpha_reports(date: Optional[str] = None):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch reports: {str(e)}"
         )
+
+
+@router.get("/token/{address}")
+async def get_token(address: str):
+    """Get detailed information about a specific token including all relationships."""
+    try:
+        with get_session() as session:
+            token = session.query(TokenDB)\
+                .filter(TokenDB.address == address)\
+                .options(
+                    joinedload(TokenDB.token_reports).joinedload(TokenReportDB.social_media_post),
+                    joinedload(TokenDB.token_opportunities)
+                )\
+                .first()
+            
+            if not token:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Token not found"
+                )
+            
+            return {
+                "id": token.id,
+                "symbol": token.symbol,
+                "name": token.name,
+                "chain": str(token.chain),
+                "address": token.address,
+                "created_at": token.created_at.isoformat(),
+                "token_reports": [
+                    {
+                        "id": report.id,
+                        "mentions_purchasable_token": report.mentions_purchasable_token,
+                        "token_symbol": report.token_symbol,
+                        "token_chain": report.token_chain,
+                        "token_address": report.token_address,
+                        "is_listed_on_dex": report.is_listed_on_dex,
+                        "trading_pairs": report.trading_pairs,
+                        "confidence_score": report.confidence_score,
+                        "reasoning": report.reasoning,
+                        "created_at": report.created_at.isoformat(),
+                        "social_media_post": {
+                            "id": report.social_media_post.id,
+                            "source": report.social_media_post.source,
+                            "post_id": report.social_media_post.post_id,
+                            "author_id": report.social_media_post.author_id,
+                            "author_username": report.social_media_post.author_username,
+                            "author_display_name": report.social_media_post.author_display_name,
+                            "text": report.social_media_post.text,
+                            "original_timestamp": report.social_media_post.original_timestamp.isoformat(),
+                            "timestamp": report.social_media_post.timestamp.isoformat(),
+                            "reactions_count": report.social_media_post.reactions_count,
+                            "replies_count": report.social_media_post.replies_count,
+                            "reposts_count": report.social_media_post.reposts_count,
+                            "created_at": report.social_media_post.created_at.isoformat()
+                        } if report.social_media_post else None
+                    }
+                    for report in token.token_reports
+                ],
+                "token_opportunities": [
+                    {
+                        "id": opp.id,
+                        "name": opp.name,
+                        "chain": str(opp.chain),
+                        "contract_address": opp.contract_address,
+                        "market_cap": float(opp.market_cap) if opp.market_cap else None,
+                        "community_score": opp.community_score,
+                        "safety_score": opp.safety_score,
+                        "justification": opp.justification,
+                        "sources": opp.sources,
+                        "recommendation": opp.recommendation,
+                        "created_at": opp.created_at.isoformat()
+                    }
+                    for opp in token.token_opportunities
+                ]
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch token: {str(e)}"
+        )
+
+@router.get("/tokens")
+async def get_tokens():
+    """Get all tokens from the database that have addresses, ordered by creation date."""
+    try:
+        with get_session() as session:
+            tokens = session.query(TokenDB)\
+                .filter(TokenDB.address.isnot(None))\
+                .filter(TokenDB.chain.in_(['base', 'solana']))\
+                .order_by(desc(TokenDB.created_at))\
+                .options(
+                    joinedload(TokenDB.token_reports).joinedload(TokenReportDB.social_media_post),
+                    joinedload(TokenDB.token_opportunities)
+                )\
+                .all()
+            
+            return [
+                {
+                    "id": token.id,
+                    "symbol": token.symbol,
+                    "name": token.name,
+                    "chain": str(token.chain),
+                    "address": token.address,
+                    "created_at": token.created_at.isoformat(),
+                    "token_reports": [
+                        {
+                            "id": report.id,
+                            "mentions_purchasable_token": report.mentions_purchasable_token,
+                            "token_symbol": report.token_symbol,
+                            "token_chain": report.token_chain,
+                            "token_address": report.token_address,
+                            "is_listed_on_dex": report.is_listed_on_dex,
+                            "trading_pairs": report.trading_pairs,
+                            "confidence_score": report.confidence_score,
+                            "reasoning": report.reasoning,
+                            "created_at": report.created_at.isoformat(),
+                            "social_media_post": {
+                                "id": report.social_media_post.id,
+                                "source": report.social_media_post.source,
+                                "post_id": report.social_media_post.post_id,
+                                "author_id": report.social_media_post.author_id,
+                                "author_username": report.social_media_post.author_username,
+                                "author_display_name": report.social_media_post.author_display_name,
+                                "text": report.social_media_post.text,
+                                "original_timestamp": report.social_media_post.original_timestamp.isoformat(),
+                                "timestamp": report.social_media_post.timestamp.isoformat(),
+                                "reactions_count": report.social_media_post.reactions_count,
+                                "replies_count": report.social_media_post.replies_count,
+                                "reposts_count": report.social_media_post.reposts_count,
+                                "created_at": report.social_media_post.created_at.isoformat()
+                            } if report.social_media_post else None
+                        }
+                        for report in token.token_reports
+                    ],
+                    "token_opportunities": [
+                        {
+                            "id": opp.id,
+                            "name": opp.name,
+                            "chain": str(opp.chain),
+                            "contract_address": opp.contract_address,
+                            "market_cap": float(opp.market_cap) if opp.market_cap else None,
+                            "community_score": opp.community_score,
+                            "safety_score": opp.safety_score,
+                            "justification": opp.justification,
+                            "sources": opp.sources,
+                            "recommendation": opp.recommendation,
+                            "created_at": opp.created_at.isoformat()
+                        }
+                        for opp in token.token_opportunities
+                    ]
+                }
+                for token in tokens
+            ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch tokens: {str(e)}"
+        )
+        
 
 @router.post(
     "/base_seek_alpha",

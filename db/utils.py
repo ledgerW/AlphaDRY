@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlmodel import SQLModel
 from sqlalchemy import text
 from typing import Dict, Any, List
@@ -284,6 +284,58 @@ def populate_dev_data():
                 token_id=snegen_token.id
             )
             session.add(snegen_opportunity)
+            
+            # Create 3 additional social media posts with token reports for SNEGEN
+            base_time = datetime.utcnow()
+            for i in range(3):
+                post_time = base_time - timedelta(hours=i)
+                # Create additional social media posts
+                additional_post = SocialMediaPostDB(
+                    source="warpcast",
+                    post_id=f"snegen_test_{i}_{post_time.timestamp()}",
+                    author_id=f"test_author_{i}",
+                    author_username=f"snegen_fan_{i}",
+                    author_display_name=f"SNEGEN Fan {i+1}",
+                    text=f"$SNEGEN is revolutionizing Solana's AI ecosystem! Test post {i+1} #SolanaAI",
+                    original_timestamp=post_time,
+                    timestamp=post_time,
+                    reactions_count=15 + i,
+                    replies_count=7 + i,
+                    reposts_count=4 + i,
+                    raw_data={"platform": "warpcast", "verified": True}
+                )
+                session.add(additional_post)
+                session.flush()
+                
+                # Create token reports for each post
+                additional_report = TokenReportDB(
+                    mentions_purchasable_token=True,
+                    token_symbol="SNEGEN",
+                    token_chain="solana",
+                    token_address="SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj",
+                    is_listed_on_dex=True,
+                    trading_pairs=["SNEGEN/SOL", "SNEGEN/USDC"],
+                    confidence_score=85 + i,
+                    reasoning=f"Test report {i+1}: SNEGEN continues to show strong growth in the Solana AI ecosystem",
+                    token_id=snegen_token.id,
+                    social_media_post=additional_post
+                )
+                session.add(additional_report)
+            
+            # Create an additional token opportunity for SNEGEN
+            additional_opportunity = TokenOpportunityDB(
+                name="SNEGEN AI Integration",
+                chain=Chain.SOLANA,
+                contract_address="SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj",
+                market_cap=800000.0,
+                community_score=9,
+                safety_score=8,
+                justification="SNEGEN is expanding its AI capabilities with new integrations and partnerships",
+                sources=["warpcast.com", "solscan.io"],
+                recommendation="Strong Buy",
+                token_id=snegen_token.id
+            )
+            session.add(additional_opportunity)
             
             session.commit()
         except Exception as e:
