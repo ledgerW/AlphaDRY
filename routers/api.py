@@ -411,49 +411,9 @@ async def analyze_and_scout(input_data: SocialMediaInput):
                 reasoning=token_report['reasoning']
             )
             
-            # Create or get existing token
-            token = None
-            try:
-                # Try to find existing token by chain and address
-                token = session.query(TokenDB).filter(
-                    TokenDB.chain == token_report['token_chain'].upper(),
-                    TokenDB.address == token_report['token_address']
-                ).first()
-                
-                if not token:
-                    # Create new token if not found
-                    token = TokenDB(
-                        symbol=token_report['token_symbol'],
-                        name=token_report['token_symbol'],  # Use symbol as name initially
-                        chain=token_report['token_chain'].upper(),
-                        address=token_report['token_address']
-                    )
-                    session.add(token)
-                    session.flush()  # Get token ID
-                
-                # Update token_report with token_id
-                db_token_report = session.query(TokenReportDB).get(token_report['id'])
-                if db_token_report:
-                    db_token_report.token_id = token.id
-                    session.flush()
-                
-                # Call the multi_agent_alpha_scout endpoint with token_report_id
-                token_alpha = await get_multi_agent_alpha_scout(token_report_model, token_report['id'])
-                
-                # Update token opportunity with token_id
-                if token_alpha:
-                    opportunity = session.query(TokenOpportunityDB).filter(
-                        TokenOpportunityDB.token_report_id == token_report['id']
-                    ).first()
-                    if opportunity:
-                        opportunity.token_id = token.id
-                        session.flush()
-                
-                return token_alpha
-                
-            except Exception as e:
-                print(f"Error creating/linking token: {str(e)}")
-                raise
+            # Call the multi_agent_alpha_scout endpoint with token_report_id
+            token_alpha = await get_multi_agent_alpha_scout(token_report_model, token_report['id'])
+            return token_alpha
     
         # If no purchasable token found, return None
         return None
