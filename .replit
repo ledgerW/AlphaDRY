@@ -76,3 +76,7 @@ deploymentTarget = "cloudrun"
 [[ports]]
 localPort = 80
 externalPort = 80
+
+[packager.features]
+guessImports = false
+packageSearch = false
