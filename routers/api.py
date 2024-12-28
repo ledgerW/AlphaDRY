@@ -205,8 +205,16 @@ async def get_token(address: str):
     """Get detailed information about a specific token including all relationships."""
     try:
         with get_session() as session:
+            # For Base/ETH addresses use case-insensitive comparison, for Solana use exact match
             token = session.query(TokenDB)\
-                .filter(TokenDB.address == address)\
+                .filter(
+                    # If address starts with 0x, use case-insensitive match (Base/ETH)
+                    # Otherwise use exact match (Solana)
+                    (
+                        (address.startswith('0x') & (func.lower(TokenDB.address) == func.lower(address))) |
+                        (~TokenDB.address.startswith('0x') & (TokenDB.address == address))
+                    )
+                )\
                 .options(
                     joinedload(TokenDB.token_reports).joinedload(TokenReportDB.social_media_post),
                     joinedload(TokenDB.token_opportunities)
