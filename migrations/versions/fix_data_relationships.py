@@ -69,7 +69,7 @@ def upgrade() -> None:
     ).scalar()
 
     if not tokens_exists:
-        # Create tokens table if it doesn't exist
+        # Create tokens table if it doesn't exist (without unique constraint initially)
         op.create_table(
             f'{prefix}tokens',
             sa.Column('id', sa.Integer, primary_key=True),
@@ -77,65 +77,106 @@ def upgrade() -> None:
             sa.Column('name', sa.String, nullable=False),
             sa.Column('chain', sa.String, nullable=False),
             sa.Column('address', sa.String, nullable=True, index=True),
-            sa.Column('created_at', sa.DateTime, nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
-            sa.UniqueConstraint('chain', 'address', name=f'uq_{prefix}token_chain_address')
+            sa.Column('created_at', sa.DateTime, nullable=False, server_default=sa.text('CURRENT_TIMESTAMP'))
         )
+    else:
+        # If table exists, drop the unique constraint if it exists
+        conn.execute(text(f"""
+            ALTER TABLE {prefix}tokens 
+            DROP CONSTRAINT IF EXISTS uq_{prefix}token_chain_address;
+        """))
 
-    # Migrate existing data: Create token records from reports and opportunities
+    # First ensure all addresses are lowercase
     conn.execute(text(f"""
+    UPDATE {prefix}token_reports
+    SET token_address = LOWER(token_address)
+    WHERE token_address IS NOT NULL;
+
+    UPDATE {prefix}token_opportunities
+    SET contract_address = LOWER(contract_address)
+    WHERE contract_address IS NOT NULL;
+
     -- Create tokens from reports if they don't exist
-    INSERT INTO {prefix}tokens (symbol, name, chain, address)
-    SELECT DISTINCT 
+    INSERT INTO {prefix}tokens (symbol, name, chain, address, created_at)
+    SELECT DISTINCT ON (token_chain, LOWER(token_address))
         COALESCE(token_symbol, '') as symbol,
         COALESCE(token_symbol, '') as name,
         token_chain as chain,
-        token_address as address
+        LOWER(token_address) as address,
+        CURRENT_TIMESTAMP as created_at
     FROM {prefix}token_reports
-    WHERE (token_chain, token_address) NOT IN (
-        SELECT chain, address
-        FROM {prefix}tokens 
-        WHERE address IS NOT NULL
-    )
-    AND token_chain IS NOT NULL 
+    WHERE token_chain IS NOT NULL 
     AND token_address IS NOT NULL
     ON CONFLICT (chain, address) DO NOTHING;
 
     -- Create tokens from opportunities if they don't exist
-    INSERT INTO {prefix}tokens (symbol, name, chain, address)
-    SELECT DISTINCT 
+    INSERT INTO {prefix}tokens (symbol, name, chain, address, created_at)
+    SELECT DISTINCT ON (chain, LOWER(contract_address))
         COALESCE(name, '') as symbol,
         COALESCE(name, '') as name,
         chain,
-        contract_address as address
+        LOWER(contract_address) as address,
+        CURRENT_TIMESTAMP as created_at
     FROM {prefix}token_opportunities
-    WHERE (chain, contract_address) NOT IN (
-        SELECT chain, address
-        FROM {prefix}tokens 
-        WHERE address IS NOT NULL
-    )
-    AND chain IS NOT NULL 
+    WHERE chain IS NOT NULL 
     AND contract_address IS NOT NULL
     ON CONFLICT (chain, address) DO NOTHING;
 
-    -- Update token_id in reports
+    -- Handle duplicates by keeping the most referenced token
+    WITH duplicates AS (
+        SELECT chain, address, array_agg(id) as ids
+        FROM {prefix}tokens
+        WHERE address IS NOT NULL
+        GROUP BY chain, address
+        HAVING count(*) > 1
+    ),
+    tokens_to_keep AS (
+        SELECT DISTINCT ON (t.chain, t.address) 
+            t.id as keep_id,
+            t.chain,
+            t.address,
+            d.ids as duplicate_ids
+        FROM {prefix}tokens t
+        JOIN duplicates d ON t.chain = d.chain AND t.address = d.address
+        LEFT JOIN {prefix}token_reports tr ON tr.token_id = t.id
+        LEFT JOIN {prefix}token_opportunities to2 ON to2.token_id = t.id
+        GROUP BY t.id, t.chain, t.address, t.created_at, d.ids
+        ORDER BY t.chain, t.address, COUNT(tr.id) + COUNT(to2.id) DESC, t.created_at ASC
+    )
+    DELETE FROM {prefix}tokens t
+    USING duplicates d
+    WHERE t.chain = d.chain 
+    AND t.address = d.address
+    AND t.id != (
+        SELECT keep_id 
+        FROM tokens_to_keep tk 
+        WHERE tk.chain = t.chain 
+        AND tk.address = t.address
+    );
+
+    -- Now update relationships with the remaining tokens
     UPDATE {prefix}token_reports r
     SET token_id = t.id
     FROM {prefix}tokens t
     WHERE r.token_chain = t.chain 
-    AND r.token_address = t.address
-    AND r.token_id IS NULL
+    AND LOWER(r.token_address) = t.address
     AND r.token_chain IS NOT NULL 
     AND r.token_address IS NOT NULL;
 
-    -- Update token_id in opportunities
     UPDATE {prefix}token_opportunities o
     SET token_id = t.id
     FROM {prefix}tokens t
     WHERE o.chain = t.chain 
-    AND o.contract_address = t.address
-    AND o.token_id IS NULL
+    AND LOWER(o.contract_address) = t.address
     AND o.chain IS NOT NULL 
     AND o.contract_address IS NOT NULL;
+
+    -- Finally add the unique constraint now that duplicates are handled
+    ALTER TABLE {prefix}tokens
+    DROP CONSTRAINT IF EXISTS uq_{prefix}token_chain_address;
+    
+    ALTER TABLE {prefix}tokens
+    ADD CONSTRAINT uq_{prefix}token_chain_address UNIQUE (chain, address);
     """))
 
     # Now add foreign key constraints if they don't exist
