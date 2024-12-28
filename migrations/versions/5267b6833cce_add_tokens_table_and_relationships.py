@@ -30,7 +30,7 @@ def upgrade() -> None:
             FROM information_schema.tables 
             WHERE table_schema = 'public' 
             AND table_name = '{prefix}tokens'
-        )
+        )::boolean
         """)
     ).scalar()
     
@@ -56,7 +56,7 @@ def upgrade() -> None:
             WHERE table_schema = 'public' 
             AND table_name = '{prefix}token_reports'
             AND column_name = 'token_id'
-        )
+        )::boolean
         """)
     ).scalar()
     
@@ -68,7 +68,7 @@ def upgrade() -> None:
             WHERE table_schema = 'public' 
             AND table_name = '{prefix}token_opportunities'
             AND column_name = 'token_id'
-        )
+        )::boolean
         """)
     ).scalar()
 
@@ -172,7 +172,7 @@ def downgrade() -> None:
             WHERE table_schema = 'public' 
             AND table_name = '{prefix}token_reports'
             AND column_name = 'token_id'
-        )
+        )::boolean
         """)
     ).scalar()
     
@@ -184,7 +184,7 @@ def downgrade() -> None:
             WHERE table_schema = 'public' 
             AND table_name = '{prefix}token_opportunities'
             AND column_name = 'token_id'
-        )
+        )::boolean
         """)
     ).scalar()
 
@@ -202,7 +202,7 @@ def downgrade() -> None:
             FROM information_schema.tables 
             WHERE table_schema = 'public' 
             AND table_name = '{prefix}tokens'
-        )
+        )::boolean
         """)
     ).scalar()
     

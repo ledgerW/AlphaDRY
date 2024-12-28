@@ -63,7 +63,8 @@ BEGIN
     END IF;
 
     -- Check alembic version
-    RAISE NOTICE 'Current alembic version:';
-    SELECT version_num FROM alembic_version;
+    RAISE NOTICE 'Current alembic version: %', (
+        SELECT version_num FROM alembic_version
+    );
 END
 $$;
