@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = 'fix_chain_enum_type'
-down_revision: Union[str, None] = 'fix_token_relationships'
+down_revision: Union[str, None] = 'drop_warpcasts_tables'  # Make this the first migration
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

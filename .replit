@@ -28,14 +28,12 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-# Only force reset in development environment
+# Only use create_db_and_tables in development
 args = """python -c 
 import os
 from database import create_db_and_tables
 if os.getenv("REPLIT_DEPLOYMENT") != "1":
     create_db_and_tables(force_reset=True)
-else:
-    create_db_and_tables(force_reset=False)
 """
 
 [[workflows.workflow]]
@@ -57,8 +55,7 @@ if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
     pip install -r requirements.txt &&
     pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql &&
     psql $DATABASE_URL < db/deployment_safety.sql &&
-    alembic stamp drop_warpcasts_tables &&  # Reset to before the tokens migration
-    alembic upgrade head &&
+    alembic upgrade head &&  # Let alembic handle all table creation in production
     uvicorn main:app --host 0.0.0.0 --port 80
 else
     # Development: Install deps, reset dev_ tables, run migrations

@@ -77,7 +77,8 @@ def tables_exist() -> bool:
         f"{env_prefix}alpha_reports",
         f"{env_prefix}warpcasts",
         f"{env_prefix}social_media_posts",
-        f"{env_prefix}token_reports"
+        f"{env_prefix}token_reports",
+        f"{env_prefix}tokens"  # Add the new tokens table to required tables check
     ]
     existing_tables = inspector.get_table_names()
     return all(table in existing_tables for table in required_tables)
