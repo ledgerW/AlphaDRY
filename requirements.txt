@@ -27,10 +27,3 @@ python-dateutil
 pyyaml
 requests
 typing-extensions
-agents
-farcaster
-langchain-core
-langchain-experimental
-langchain-huggingface
-langchain-qdrant
-langchain-text-splitters
