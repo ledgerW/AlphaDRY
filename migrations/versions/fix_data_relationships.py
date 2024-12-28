@@ -21,7 +21,42 @@ def upgrade() -> None:
     prefix = get_env_prefix()
     conn = op.get_bind()
 
-    # First ensure the tokens table exists and has the right structure
+    # First ensure token_id columns exist in reports and opportunities tables
+    reports_token_id_exists = conn.execute(
+        text(f"""
+        SELECT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = '{prefix}token_reports'
+            AND column_name = 'token_id'
+        )::boolean
+        """)
+    ).scalar()
+
+    opps_token_id_exists = conn.execute(
+        text(f"""
+        SELECT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = '{prefix}token_opportunities'
+            AND column_name = 'token_id'
+        )::boolean
+        """)
+    ).scalar()
+
+    if not reports_token_id_exists:
+        op.add_column(f'{prefix}token_reports', 
+            sa.Column('token_id', sa.Integer, nullable=True)
+        )
+
+    if not opps_token_id_exists:
+        op.add_column(f'{prefix}token_opportunities',
+            sa.Column('token_id', sa.Integer, nullable=True)
+        )
+
+    # Then ensure the tokens table exists and has the right structure
     tokens_exists = conn.execute(
         text(f"""
         SELECT EXISTS (
@@ -51,56 +86,56 @@ def upgrade() -> None:
     -- Create tokens from reports if they don't exist
     INSERT INTO {prefix}tokens (symbol, name, chain, address)
     SELECT DISTINCT 
-        symbol,
-        symbol as name,  -- Use symbol as name if not available
-        chain,
-        address
+        COALESCE(token_symbol, '') as symbol,
+        COALESCE(token_symbol, '') as name,
+        token_chain as chain,
+        token_address as address
     FROM {prefix}token_reports
-    WHERE (chain, address) NOT IN (
-        SELECT chain, address 
+    WHERE (token_chain, token_address) NOT IN (
+        SELECT chain, address
         FROM {prefix}tokens 
         WHERE address IS NOT NULL
     )
-    AND chain IS NOT NULL 
-    AND address IS NOT NULL
+    AND token_chain IS NOT NULL 
+    AND token_address IS NOT NULL
     ON CONFLICT (chain, address) DO NOTHING;
 
     -- Create tokens from opportunities if they don't exist
     INSERT INTO {prefix}tokens (symbol, name, chain, address)
     SELECT DISTINCT 
-        symbol,
-        symbol as name,
+        COALESCE(name, '') as symbol,
+        COALESCE(name, '') as name,
         chain,
-        address
+        contract_address as address
     FROM {prefix}token_opportunities
-    WHERE (chain, address) NOT IN (
-        SELECT chain, address 
+    WHERE (chain, contract_address) NOT IN (
+        SELECT chain, address
         FROM {prefix}tokens 
         WHERE address IS NOT NULL
     )
     AND chain IS NOT NULL 
-    AND address IS NOT NULL
+    AND contract_address IS NOT NULL
     ON CONFLICT (chain, address) DO NOTHING;
 
     -- Update token_id in reports
     UPDATE {prefix}token_reports r
     SET token_id = t.id
     FROM {prefix}tokens t
-    WHERE r.chain = t.chain 
-    AND r.address = t.address
+    WHERE r.token_chain = t.chain 
+    AND r.token_address = t.address
     AND r.token_id IS NULL
-    AND r.chain IS NOT NULL 
-    AND r.address IS NOT NULL;
+    AND r.token_chain IS NOT NULL 
+    AND r.token_address IS NOT NULL;
 
     -- Update token_id in opportunities
     UPDATE {prefix}token_opportunities o
     SET token_id = t.id
     FROM {prefix}tokens t
     WHERE o.chain = t.chain 
-    AND o.address = t.address
+    AND o.contract_address = t.address
     AND o.token_id IS NULL
     AND o.chain IS NOT NULL 
-    AND o.address IS NOT NULL;
+    AND o.contract_address IS NOT NULL;
     """))
 
     # Now add foreign key constraints if they don't exist
