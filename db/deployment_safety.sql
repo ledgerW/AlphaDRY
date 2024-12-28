@@ -1,92 +1,150 @@
--- Simple backup verification
+-- Function to create backup tables
+CREATE OR REPLACE FUNCTION backup_prod_tables() RETURNS void AS $$
+DECLARE
+    table_name text;
+    backup_timestamp text;
+    backup_table text;
+BEGIN
+    -- Generate timestamp for backup tables
+    backup_timestamp := to_char(current_timestamp, 'YYYYMMDD_HH24MI');
+    
+    -- Backup each production table
+    FOR table_name IN 
+        SELECT tablename 
+        FROM pg_tables 
+        WHERE schemaname = 'public' 
+        AND tablename LIKE 'prod_%'
+    LOOP
+        backup_table := 'backup_' || table_name || '_' || backup_timestamp;
+        EXECUTE format('CREATE TABLE %I AS SELECT * FROM %I', backup_table, table_name);
+        RAISE NOTICE 'Created backup: %', backup_table;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to verify data integrity after migration
+CREATE OR REPLACE FUNCTION verify_prod_data_integrity() RETURNS boolean AS $$
+DECLARE
+    table_name text;
+    backup_table text;
+    orig_count bigint;
+    new_count bigint;
+    data_preserved boolean := true;
+BEGIN
+    -- Get the most recent backup timestamp
+    WITH latest_backup AS (
+        SELECT split_part(tablename, '_', 3) || '_' || split_part(tablename, '_', 4) as backup_ts
+        FROM pg_tables 
+        WHERE schemaname = 'public' 
+        AND tablename LIKE 'backup_prod_%'
+        ORDER BY split_part(tablename, '_', 3) || '_' || split_part(tablename, '_', 4) DESC
+        LIMIT 1
+    )
+    
+    -- Check each production table against its backup
+    FOR table_name IN 
+        SELECT tablename 
+        FROM pg_tables 
+        WHERE schemaname = 'public' 
+        AND tablename LIKE 'prod_%'
+    LOOP
+        backup_table := 'backup_' || table_name || '_' || (SELECT backup_ts FROM latest_backup);
+        
+        -- Get row counts
+        EXECUTE format('SELECT COUNT(*) FROM %I', table_name) INTO new_count;
+        EXECUTE format('SELECT COUNT(*) FROM %I', backup_table) INTO orig_count;
+        
+        -- Check if data was preserved
+        IF new_count < orig_count THEN
+            RAISE WARNING 'Data loss detected in %: Original count: %, New count: %', 
+                        table_name, orig_count, new_count;
+            data_preserved := false;
+        END IF;
+    END LOOP;
+    
+    RETURN data_preserved;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to rollback if data loss is detected
+CREATE OR REPLACE FUNCTION rollback_to_backup() RETURNS void AS $$
+DECLARE
+    table_name text;
+    backup_table text;
+BEGIN
+    -- Get the most recent backup timestamp
+    WITH latest_backup AS (
+        SELECT split_part(tablename, '_', 3) || '_' || split_part(tablename, '_', 4) as backup_ts
+        FROM pg_tables 
+        WHERE schemaname = 'public' 
+        AND tablename LIKE 'backup_prod_%'
+        ORDER BY split_part(tablename, '_', 3) || '_' || split_part(tablename, '_', 4) DESC
+        LIMIT 1
+    )
+    
+    -- Restore each production table from its backup
+    FOR table_name IN 
+        SELECT tablename 
+        FROM pg_tables 
+        WHERE schemaname = 'public' 
+        AND tablename LIKE 'prod_%'
+    LOOP
+        backup_table := 'backup_' || table_name || '_' || (SELECT backup_ts FROM latest_backup);
+        
+        -- Restore data from backup
+        EXECUTE format('TRUNCATE TABLE %I', table_name);
+        EXECUTE format('INSERT INTO %I SELECT * FROM %I', table_name, backup_table);
+        
+        RAISE NOTICE 'Restored % from backup', table_name;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Pre-migration safety checks and backup
 DO $$
 BEGIN
+    -- Create backups before any migration
+    PERFORM backup_prod_tables();
+    
+    -- Verify existing prod tables and their relationships
     IF NOT EXISTS (
         SELECT 1 
         FROM information_schema.tables 
         WHERE table_schema = 'public' 
-        AND table_name LIKE 'backup_%'
+        AND table_name LIKE 'prod_%'
     ) THEN
-        RAISE NOTICE 'Warning: No backup tables found. Consider taking a backup before proceeding.';
+        RAISE NOTICE 'No production tables found to backup';
+        RETURN;
     END IF;
 END
 $$;
 
--- Check for existing prod tables and their relationships
+-- Post-migration verification
+DO $$
+BEGIN
+    -- Verify data integrity after migration
+    IF NOT verify_prod_data_integrity() THEN
+        RAISE WARNING 'Data integrity check failed. Initiating rollback...';
+        PERFORM rollback_to_backup();
+        RAISE EXCEPTION 'Migration rolled back due to data loss';
+    END IF;
+END
+$$;
+
+-- Cleanup old backups (keep last 3 days)
 DO $$
 DECLARE
-    missing_tables text[];
-    table_issues text[];
-    column_exists boolean;
+    old_backup text;
 BEGIN
-    -- Check which required tables exist
-    SELECT ARRAY_AGG(t) INTO missing_tables
-    FROM unnest(ARRAY[
-        'prod_tokens',
-        'prod_token_reports',
-        'prod_token_opportunities',
-        'prod_alpha_reports',
-        'prod_social_media_posts'
-    ]) t
-    WHERE NOT EXISTS (
-        SELECT 1 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = t
-    );
-
-    -- If any tables are missing, raise notice
-    IF array_length(missing_tables, 1) > 0 THEN
-        RAISE NOTICE 'Missing tables: %', array_to_string(missing_tables, ', ');
-    END IF;
-
-    -- Check for chain type
-    IF NOT EXISTS (
-        SELECT 1 
-        FROM pg_type 
-        WHERE typname = 'chain'
-    ) THEN
-        RAISE NOTICE 'Chain enum type is missing';
-    END IF;
-
-    -- Check if token_id columns already exist
-    SELECT EXISTS (
-        SELECT 1 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'prod_token_reports' 
-        AND column_name = 'token_id'
-    ) INTO column_exists;
-    
-    IF column_exists THEN
-        RAISE NOTICE 'WARNING: token_id column already exists in prod_token_reports';
-    END IF;
-
-    -- If prod_tokens is missing, we need to run the tokens migration
-    IF array_length(missing_tables, 1) > 0 AND array_position(missing_tables, 'prod_tokens') IS NOT NULL THEN
-        -- Create the tokens table directly to ensure it exists before running migrations
-        CREATE TABLE IF NOT EXISTS prod_tokens (
-            id SERIAL PRIMARY KEY,
-            symbol VARCHAR NOT NULL,
-            name VARCHAR NOT NULL,
-            chain VARCHAR NOT NULL,
-            address VARCHAR,
-            created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE INDEX IF NOT EXISTS ix_prod_tokens_symbol ON prod_tokens(symbol);
-        CREATE INDEX IF NOT EXISTS ix_prod_tokens_address ON prod_tokens(address);
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_token_chain_address ON prod_tokens(chain, address);
-        
-        -- Reset alembic version to before the tokens migration
-        UPDATE alembic_version SET version_num = 'convert_chain_to_string'
-        WHERE version_num = 'fix_token_relationships';
-        
-        RAISE NOTICE 'Created prod_tokens table and reset migration version';
-    END IF;
-    
-    -- Check alembic version
-    RAISE NOTICE 'Current alembic version: %', (
-        SELECT version_num FROM alembic_version
-    );
+    FOR old_backup IN 
+        SELECT tablename 
+        FROM pg_tables 
+        WHERE schemaname = 'public' 
+        AND tablename LIKE 'backup_prod_%'
+        AND split_part(tablename, '_', 3)::date < current_date - interval '3 days'
+    LOOP
+        EXECUTE format('DROP TABLE IF EXISTS %I', old_backup);
+        RAISE NOTICE 'Dropped old backup: %', old_backup;
+    END LOOP;
 END
 $$;

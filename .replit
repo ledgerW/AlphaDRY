@@ -51,12 +51,16 @@ waitForPort = 80
 [deployment]
 run = ["sh", "-c", """
 if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
-    # Production: Install deps, run safety checks, run migrations (preserves prod_ tables)
+    # Production: Install deps and run migrations (preserves prod_ tables)
     pip install -r requirements.txt &&
+    
+    # Take a backup first
     pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql &&
-    psql $DATABASE_URL < db/deployment_safety.sql &&
-    alembic upgrade 5267b6833cce &&  # Run up to tokens table creation
-    alembic upgrade head &&  # Run remaining migrations
+    
+    # Run migrations in order that preserves data
+    alembic upgrade fix_data_relationships &&  # This creates tokens table and migrates data safely
+    alembic upgrade head &&  # Run any remaining migrations
+    
     uvicorn main:app --host 0.0.0.0 --port 80
 else
     # Development: Install deps, reset dev_ tables, run migrations

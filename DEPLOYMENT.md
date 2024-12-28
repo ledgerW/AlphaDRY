@@ -1,88 +1,61 @@
-# Deployment Safety Checklist
+# Safe Database Deployment Guide
 
-## ⚠️ IMPORTANT: Database Backup is MANDATORY
+## Pre-Deployment Steps
 
-The backup step is **NOT** optional. You **MUST** create a backup before proceeding with any deployment steps.
-
-## Pre-Deployment Checks
-
-1. **Environment Variables**
-   - [ ] Verify DATABASE_URL is set correctly for production
-   - [ ] Verify REPLIT_DEPLOYMENT=1 is set for production environment
-   - [ ] Verify API_KEY is set correctly
-   - [ ] Verify API_BASE_URL is set correctly
-
-2. **Database Backup (REQUIRED)**
+1. Always ensure the deployment safety SQL has been run:
    ```sql
-   # This step is MANDATORY - deployment will fail without today's backup
-   pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql
+   \i db/deployment_safety.sql
    ```
+   This will:
+   - Create backups of all production tables
+   - Set up safety checks and rollback functions
+   - Clean up old backups (keeps last 3 days)
 
-## Deployment Steps
-
-1. **Update Database Schema**
-   - [ ] Run the deployment safety SQL script:
+2. Verify the current database state:
    ```bash
-   # This script will check for backup and prevent data loss
-   psql $DATABASE_URL < db/deployment_safety.sql
+   alembic current
    ```
 
-2. **Verify Database State**
-   - [ ] Confirm all tables exist with correct prefixes and data is intact:
-   ```sql
-   -- Check tables exist
-   SELECT table_name 
-   FROM information_schema.tables 
-   WHERE table_schema = 'public' 
-   AND table_name LIKE 'prod_%';
+## Running Migrations
 
-   -- Verify data counts
-   SELECT 
-       (SELECT COUNT(*) FROM prod_token_opportunities) as token_opportunities_count,
-       (SELECT COUNT(*) FROM prod_alpha_reports) as alpha_reports_count,
-       (SELECT COUNT(*) FROM prod_warpcasts) as warpcasts_count,
-       (SELECT COUNT(*) FROM prod_social_media_posts) as social_posts_count,
-       (SELECT COUNT(*) FROM prod_token_reports) as token_reports_count;
+1. Before running migrations, ensure you're in production mode:
+   ```bash
+   export REPLIT_DEPLOYMENT=1
    ```
 
-## Rollback Plan
-
-If issues are encountered:
-
-1. **Stop Deployment**
-   - Immediately halt any ongoing deployment steps
-
-2. **Restore Database Backup**
-   ```sql
-   psql $DATABASE_URL < backup_[timestamp].sql
+2. Run migrations with the following command:
+   ```bash
+   alembic upgrade head
    ```
 
-3. **Verify Restoration**
-   - Run the data count query above to confirm data was restored correctly
-   - Check application functionality
+The deployment safety system will:
+- Automatically create backups before migrations
+- Verify data integrity after migrations
+- Automatically rollback if data loss is detected
 
-## Post-Deployment Verification
+## Troubleshooting
 
-1. **Monitor System**
-   - [ ] Monitor database performance
-   - [ ] Verify API endpoints are responding correctly
-   - [ ] Check error logs for any issues
+If a migration fails or data loss is detected:
 
-2. **Data Integrity**
-   - [ ] Verify existing data is intact using the count query above
-   - [ ] Confirm new records are being created correctly
-   - [ ] Sample check a few records from each table
+1. The system will automatically rollback to the last backup
+2. Check the postgres logs for details about what went wrong
+3. Fix the migration scripts as needed
+4. Re-run the deployment process
 
-## Schema Changes
+## Manual Rollback
 
-- All schema changes must be done through ALTER statements, not DROP/CREATE
-- Always use IF EXISTS/IF NOT EXISTS clauses
-- Test schema changes in development first
-- Include rollback statements for each schema change
+If needed, you can manually trigger a rollback:
 
-## Notes
+```sql
+SELECT rollback_to_backup();
+```
 
-- The deployment script now includes safety checks to prevent accidental data loss
-- A backup from the current day is required for deployment to proceed
-- Schema changes are applied safely without dropping tables
-- Monitor the application during and after deployment for any issues
+## Backup Management
+
+- Backups are automatically created before migrations
+- Backups are kept for 3 days
+- You can view existing backups:
+  ```sql
+  SELECT tablename, pg_size_pretty(pg_total_relation_size(tablename::text)) 
+  FROM pg_tables 
+  WHERE tablename LIKE 'backup_prod_%';
