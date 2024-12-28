@@ -55,7 +55,8 @@ if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
     pip install -r requirements.txt &&
     pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql &&
     psql $DATABASE_URL < db/deployment_safety.sql &&
-    alembic upgrade head &&  # Let alembic handle all table creation in production
+    alembic upgrade 5267b6833cce &&  # Run up to tokens table creation
+    alembic upgrade head &&  # Run remaining migrations
     uvicorn main:app --host 0.0.0.0 --port 80
 else
     # Development: Install deps, reset dev_ tables, run migrations

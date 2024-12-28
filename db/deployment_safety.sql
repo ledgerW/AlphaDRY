@@ -62,6 +62,28 @@ BEGIN
         RAISE NOTICE 'WARNING: token_id column already exists in prod_token_reports';
     END IF;
 
+    -- If prod_tokens is missing, we need to run the tokens migration
+    IF array_length(missing_tables, 1) > 0 AND array_position(missing_tables, 'prod_tokens') IS NOT NULL THEN
+        -- Create the tokens table directly to ensure it exists before running migrations
+        CREATE TABLE IF NOT EXISTS prod_tokens (
+            id SERIAL PRIMARY KEY,
+            symbol VARCHAR NOT NULL,
+            name VARCHAR NOT NULL,
+            chain VARCHAR NOT NULL,
+            address VARCHAR,
+            created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS ix_prod_tokens_symbol ON prod_tokens(symbol);
+        CREATE INDEX IF NOT EXISTS ix_prod_tokens_address ON prod_tokens(address);
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_prod_token_chain_address ON prod_tokens(chain, address);
+        
+        -- Reset alembic version to before the tokens migration
+        UPDATE alembic_version SET version_num = 'convert_chain_to_string'
+        WHERE version_num = 'fix_token_relationships';
+        
+        RAISE NOTICE 'Created prod_tokens table and reset migration version';
+    END IF;
+    
     -- Check alembic version
     RAISE NOTICE 'Current alembic version: %', (
         SELECT version_num FROM alembic_version
