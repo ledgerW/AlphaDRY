@@ -30,16 +30,18 @@ DECLARE
     orig_count bigint;
     new_count bigint;
     data_preserved boolean := true;
+    latest_backup_ts text;
 BEGIN
     -- Get the most recent backup timestamp
-    WITH latest_backup AS (
+    SELECT backup_ts INTO latest_backup_ts
+    FROM (
         SELECT split_part(tablename, '_', 3) || '_' || split_part(tablename, '_', 4) as backup_ts
         FROM pg_tables 
         WHERE schemaname = 'public' 
         AND tablename LIKE 'backup_prod_%'
         ORDER BY split_part(tablename, '_', 3) || '_' || split_part(tablename, '_', 4) DESC
         LIMIT 1
-    )
+    ) latest_backup;
     
     -- Check each production table against its backup
     FOR table_name IN 
@@ -48,7 +50,7 @@ BEGIN
         WHERE schemaname = 'public' 
         AND tablename LIKE 'prod_%'
     LOOP
-        backup_table := 'backup_' || table_name || '_' || (SELECT backup_ts FROM latest_backup);
+        backup_table := 'backup_' || table_name || '_' || latest_backup_ts;
         
         -- Get row counts
         EXECUTE format('SELECT COUNT(*) FROM %I', table_name) INTO new_count;
@@ -71,16 +73,18 @@ CREATE OR REPLACE FUNCTION rollback_to_backup() RETURNS void AS $$
 DECLARE
     table_name text;
     backup_table text;
+    latest_backup_ts text;
 BEGIN
     -- Get the most recent backup timestamp
-    WITH latest_backup AS (
+    SELECT backup_ts INTO latest_backup_ts
+    FROM (
         SELECT split_part(tablename, '_', 3) || '_' || split_part(tablename, '_', 4) as backup_ts
         FROM pg_tables 
         WHERE schemaname = 'public' 
         AND tablename LIKE 'backup_prod_%'
         ORDER BY split_part(tablename, '_', 3) || '_' || split_part(tablename, '_', 4) DESC
         LIMIT 1
-    )
+    ) latest_backup;
     
     -- Restore each production table from its backup
     FOR table_name IN 
@@ -89,7 +93,7 @@ BEGIN
         WHERE schemaname = 'public' 
         AND tablename LIKE 'prod_%'
     LOOP
-        backup_table := 'backup_' || table_name || '_' || (SELECT backup_ts FROM latest_backup);
+        backup_table := 'backup_' || table_name || '_' || latest_backup_ts;
         
         -- Restore data from backup
         EXECUTE format('TRUNCATE TABLE %I', table_name);
