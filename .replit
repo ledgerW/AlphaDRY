@@ -57,8 +57,14 @@ if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
     # Run deployment safety SQL first
     psql $DATABASE_URL -f db/deployment_safety.sql &&
     
-    # Run all migrations in one go to avoid duplicate runs
-    alembic upgrade head &&
+    # Clean up tokens without addresses
+    psql $DATABASE_URL -f cleanup_null_addresses.sql &&
+    
+    # Clean up duplicate tokens
+    psql $DATABASE_URL -f cleanup_token_duplicates.sql &&
+    
+    # Stamp the current migration version to sync with dev
+    alembic stamp convert_chain_to_string &&
     
     # Verify database state
     alembic current &&
