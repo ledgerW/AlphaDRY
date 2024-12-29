@@ -1,7 +1,7 @@
 """remove unintended constraints
 
 Revision ID: remove_unintended_constraints
-Revises: fix_token_address_cases
+Revises: fix_data_relationships
 Create Date: 2024-01-10 10:00:00.000000
 
 """
@@ -13,7 +13,7 @@ from db.connection import get_env_prefix
 
 # revision identifiers, used by Alembic.
 revision: str = 'remove_unintended_constraints'
-down_revision: Union[str, None] = 'fix_token_address_cases'
+down_revision: Union[str, None] = 'fix_data_relationships'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
