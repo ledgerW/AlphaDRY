@@ -6,6 +6,12 @@ from dateutil import parser
 import json
 
 
+class SocialMediaSummary(BaseModel):
+    """Summary of social media posts for a token"""
+    summary: Annotated[str, "Generated summary of all social media messages"]
+    total_posts: Annotated[int, "Total number of social media posts"]
+
+
 # Warpcast
 class Warpcast(BaseModel):
     raw_cast: Annotated[dict[str, Any], "Raw cast data from the Farcaster API"]
