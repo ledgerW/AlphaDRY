@@ -4,9 +4,21 @@ DECLARE
     table_name text;
     backup_timestamp text;
     backup_table text;
+    existing_backup text;
 BEGIN
     -- Generate timestamp for backup tables
     backup_timestamp := to_char(current_timestamp, 'YYYYMMDD_HH24MI');
+    
+    -- First drop any existing backup tables from today to avoid conflicts
+    FOR existing_backup IN 
+        SELECT tablename 
+        FROM pg_tables 
+        WHERE schemaname = 'public' 
+        AND tablename LIKE 'backup_prod_%_' || to_char(current_date, 'YYYYMMDD') || '%'
+    LOOP
+        EXECUTE format('DROP TABLE IF EXISTS %I', existing_backup);
+        RAISE NOTICE 'Dropped existing backup: %', existing_backup;
+    END LOOP;
     
     -- Backup each production table
     FOR table_name IN 
@@ -154,20 +166,52 @@ BEGIN
 END
 $$;
 
--- Cleanup old backups (keep last 3 days)
+-- Cleanup old backups (keep only most recent backup per day for last 3 days)
 DO $$
 DECLARE
+    backup_date text;
     old_backup text;
+    latest_backup text;
 BEGIN
-    FOR old_backup IN 
-        SELECT tablename 
+    -- For each unique backup date
+    FOR backup_date IN 
+        SELECT DISTINCT substring(tablename from 'backup_prod_.*_(\d{8})') as bdate
         FROM pg_tables 
         WHERE schemaname = 'public' 
-        AND tablename LIKE 'backup_prod_%'
-        AND split_part(tablename, '_', 3)::date < current_date - interval '3 days'
+        AND tablename ~ 'backup_prod_.*_\d{8}'
+        ORDER BY bdate DESC
     LOOP
-        EXECUTE format('DROP TABLE IF EXISTS %I', old_backup);
-        RAISE NOTICE 'Dropped old backup: %', old_backup;
+        -- If backup date is older than 3 days, drop all backups from that date
+        IF backup_date::date < current_date - interval '3 days' THEN
+            FOR old_backup IN 
+                SELECT tablename 
+                FROM pg_tables 
+                WHERE schemaname = 'public' 
+                AND tablename LIKE '%' || backup_date || '%'
+            LOOP
+                EXECUTE format('DROP TABLE IF EXISTS %I', old_backup);
+                RAISE NOTICE 'Dropped old backup: %', old_backup;
+            END LOOP;
+        ELSE
+            -- For recent dates, keep only the latest backup of each day
+            FOR old_backup IN 
+                SELECT tablename 
+                FROM pg_tables 
+                WHERE schemaname = 'public' 
+                AND tablename LIKE '%' || backup_date || '%'
+                AND tablename NOT IN (
+                    SELECT tablename 
+                    FROM pg_tables 
+                    WHERE schemaname = 'public' 
+                    AND tablename LIKE '%' || backup_date || '%'
+                    ORDER BY tablename DESC 
+                    LIMIT 1
+                )
+            LOOP
+                EXECUTE format('DROP TABLE IF EXISTS %I', old_backup);
+                RAISE NOTICE 'Dropped duplicate backup: %', old_backup;
+            END LOOP;
+        END IF;
     END LOOP;
 END
 $$;
