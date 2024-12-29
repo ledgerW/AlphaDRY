@@ -63,7 +63,7 @@ from database import (
     AlphaReportDB, TokenReportDB, SocialMediaPostDB, TokenDB, get_session, 
     create_social_media_post, create_token_report
 )
-from sqlalchemy import desc
+from sqlalchemy import desc, func, and_, or_, not_
 
 
 from db.operations.alpha import has_recent_token_report
@@ -210,9 +210,15 @@ async def get_token(address: str):
                 .filter(
                     # If address starts with 0x, use case-insensitive match (Base/ETH)
                     # Otherwise use exact match (Solana)
-                    (
-                        (address.startswith('0x') & (func.lower(TokenDB.address) == func.lower(address))) |
-                        (~TokenDB.address.startswith('0x') & (TokenDB.address == address))
+                    or_(
+                        and_(
+                            TokenDB.address.startswith('0x'),
+                            func.lower(TokenDB.address) == func.lower(address)
+                        ),
+                        and_(
+                            not_(TokenDB.address.startswith('0x')),
+                            TokenDB.address == address
+                        )
                     )
                 )\
                 .options(
