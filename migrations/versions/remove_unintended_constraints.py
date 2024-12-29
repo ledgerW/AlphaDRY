@@ -58,22 +58,26 @@ def upgrade() -> None:
     END $$;
     """))
 
-    # Verify the tokens table still has its intended unique constraint
+    # Ensure the tokens table has its intended unique constraint
     op.execute(text(f"""
     DO $$
     BEGIN
-        -- Check if the unique constraint exists on tokens table
-        IF NOT EXISTS (
-            SELECT 1
-            FROM information_schema.table_constraints
-            WHERE table_schema = 'public'
-            AND table_name = '{prefix}tokens'
-            AND constraint_name = 'uq_{prefix}token_chain_address'
-        ) THEN
-            -- Recreate it if it's missing
+        -- First try to drop the constraint if it exists
+        BEGIN
+            ALTER TABLE {prefix}tokens
+            DROP CONSTRAINT IF EXISTS uq_{prefix}token_chain_address;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        -- Now add the constraint back
+        BEGIN
             ALTER TABLE {prefix}tokens
             ADD CONSTRAINT uq_{prefix}token_chain_address UNIQUE (chain, address);
-        END IF;
+        EXCEPTION WHEN duplicate_table THEN
+            -- Constraint already exists, which is fine
+            NULL;
+        END;
     END $$;
     """))
 

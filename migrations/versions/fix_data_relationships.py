@@ -165,23 +165,7 @@ def upgrade() -> None:
     AND o.token_id IS NULL;
     """))
 
-    # Add back the unique constraint with proper error handling
-    conn.execute(text(f"""
-    DO $$
-    BEGIN
-        -- Only add the constraint if it doesn't already exist
-        IF NOT EXISTS (
-            SELECT 1
-            FROM information_schema.table_constraints
-            WHERE table_schema = 'public'
-            AND table_name = '{prefix}tokens'
-            AND constraint_name = 'uq_{prefix}token_chain_address'
-        ) THEN
-            ALTER TABLE {prefix}tokens
-            ADD CONSTRAINT uq_{prefix}token_chain_address UNIQUE (chain, address);
-        END IF;
-    END $$;
-    """))
+    # Note: Constraint management moved to remove_unintended_constraints migration
 
     # Now add foreign key constraints if they don't exist
     fk_reports_exists = conn.execute(
