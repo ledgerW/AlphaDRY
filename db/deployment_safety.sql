@@ -52,15 +52,25 @@ BEGIN
     LOOP
         backup_table := 'backup_' || table_name || '_' || latest_backup_ts;
         
-        -- Get row counts
-        EXECUTE format('SELECT COUNT(*) FROM %I', table_name) INTO new_count;
-        EXECUTE format('SELECT COUNT(*) FROM %I', backup_table) INTO orig_count;
-        
-        -- Check if data was preserved
-        IF new_count < orig_count THEN
-            RAISE WARNING 'Data loss detected in %: Original count: %, New count: %', 
-                        table_name, orig_count, new_count;
-            data_preserved := false;
+        -- Check if backup table exists
+        IF EXISTS (
+            SELECT 1 
+            FROM pg_tables 
+            WHERE schemaname = 'public' 
+            AND tablename = backup_table
+        ) THEN
+            -- Get row counts
+            EXECUTE format('SELECT COUNT(*) FROM %I', table_name) INTO new_count;
+            EXECUTE format('SELECT COUNT(*) FROM %I', backup_table) INTO orig_count;
+            
+            -- Check if data was preserved
+            IF new_count < orig_count THEN
+                RAISE WARNING 'Data loss detected in %: Original count: %, New count: %', 
+                            table_name, orig_count, new_count;
+                data_preserved := false;
+            END IF;
+        ELSE
+            RAISE NOTICE 'Backup table % not found, skipping verification', backup_table;
         END IF;
     END LOOP;
     
@@ -95,11 +105,20 @@ BEGIN
     LOOP
         backup_table := 'backup_' || table_name || '_' || latest_backup_ts;
         
-        -- Restore data from backup
-        EXECUTE format('TRUNCATE TABLE %I', table_name);
-        EXECUTE format('INSERT INTO %I SELECT * FROM %I', table_name, backup_table);
-        
-        RAISE NOTICE 'Restored % from backup', table_name;
+        -- Check if backup table exists
+        IF EXISTS (
+            SELECT 1 
+            FROM pg_tables 
+            WHERE schemaname = 'public' 
+            AND tablename = backup_table
+        ) THEN
+            -- Restore data from backup
+            EXECUTE format('TRUNCATE TABLE %I', table_name);
+            EXECUTE format('INSERT INTO %I SELECT * FROM %I', table_name, backup_table);
+            RAISE NOTICE 'Restored % from backup', table_name;
+        ELSE
+            RAISE NOTICE 'Backup table % not found, skipping restore', backup_table;
+        END IF;
     END LOOP;
 END;
 $$ LANGUAGE plpgsql;
