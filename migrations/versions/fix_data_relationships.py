@@ -69,7 +69,7 @@ def upgrade() -> None:
     ).scalar()
 
     if not tokens_exists:
-        # Create tokens table if it doesn't exist (without unique constraint initially)
+        # Create tokens table if it doesn't exist
         op.create_table(
             f'{prefix}tokens',
             sa.Column('id', sa.Integer, primary_key=True),
@@ -79,12 +79,6 @@ def upgrade() -> None:
             sa.Column('address', sa.String, nullable=True, index=True),
             sa.Column('created_at', sa.DateTime, nullable=False, server_default=sa.text('CURRENT_TIMESTAMP'))
         )
-    else:
-        # If table exists, drop the unique constraint if it exists
-        conn.execute(text(f"""
-            ALTER TABLE {prefix}tokens 
-            DROP CONSTRAINT IF EXISTS uq_{prefix}token_chain_address;
-        """))
 
     # First ensure all addresses are lowercase
     conn.execute(text(f"""
@@ -95,8 +89,29 @@ def upgrade() -> None:
     UPDATE {prefix}token_opportunities
     SET contract_address = LOWER(contract_address)
     WHERE contract_address IS NOT NULL;
+    """))
 
-    -- Create tokens from reports if they don't exist
+    # Check if unique constraint exists before trying to create tokens
+    has_unique_constraint = conn.execute(text(f"""
+    SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE table_schema = 'public'
+        AND table_name = '{prefix}tokens'
+        AND constraint_type = 'UNIQUE'
+        AND constraint_name = 'uq_{prefix}token_chain_address'
+    )
+    """)).scalar()
+
+    if has_unique_constraint:
+        # Drop the constraint temporarily for data migration
+        conn.execute(text(f"""
+        ALTER TABLE {prefix}tokens
+        DROP CONSTRAINT uq_{prefix}token_chain_address;
+        """))
+
+    # Create tokens from reports
+    conn.execute(text(f"""
     INSERT INTO {prefix}tokens (symbol, name, chain, address, created_at)
     SELECT DISTINCT ON (token_chain, LOWER(token_address))
         COALESCE(token_symbol, '') as symbol,
@@ -107,9 +122,15 @@ def upgrade() -> None:
     FROM {prefix}token_reports
     WHERE token_chain IS NOT NULL 
     AND token_address IS NOT NULL
-    ON CONFLICT (chain, address) DO NOTHING;
+    AND NOT EXISTS (
+        SELECT 1 FROM {prefix}tokens t
+        WHERE t.chain = token_chain
+        AND t.address = LOWER(token_address)
+    );
+    """))
 
-    -- Create tokens from opportunities if they don't exist
+    # Create tokens from opportunities
+    conn.execute(text(f"""
     INSERT INTO {prefix}tokens (symbol, name, chain, address, created_at)
     SELECT DISTINCT ON (chain, LOWER(contract_address))
         COALESCE(name, '') as symbol,
@@ -120,48 +141,23 @@ def upgrade() -> None:
     FROM {prefix}token_opportunities
     WHERE chain IS NOT NULL 
     AND contract_address IS NOT NULL
-    ON CONFLICT (chain, address) DO NOTHING;
-
-    -- Handle duplicates by keeping the most referenced token
-    WITH duplicates AS (
-        SELECT chain, address, array_agg(id) as ids
-        FROM {prefix}tokens
-        WHERE address IS NOT NULL
-        GROUP BY chain, address
-        HAVING count(*) > 1
-    ),
-    tokens_to_keep AS (
-        SELECT DISTINCT ON (t.chain, t.address) 
-            t.id as keep_id,
-            t.chain,
-            t.address,
-            d.ids as duplicate_ids
-        FROM {prefix}tokens t
-        JOIN duplicates d ON t.chain = d.chain AND t.address = d.address
-        LEFT JOIN {prefix}token_reports tr ON tr.token_id = t.id
-        LEFT JOIN {prefix}token_opportunities to2 ON to2.token_id = t.id
-        GROUP BY t.id, t.chain, t.address, t.created_at, d.ids
-        ORDER BY t.chain, t.address, COUNT(tr.id) + COUNT(to2.id) DESC, t.created_at ASC
-    )
-    DELETE FROM {prefix}tokens t
-    USING duplicates d
-    WHERE t.chain = d.chain 
-    AND t.address = d.address
-    AND t.id != (
-        SELECT keep_id 
-        FROM tokens_to_keep tk 
-        WHERE tk.chain = t.chain 
-        AND tk.address = t.address
+    AND NOT EXISTS (
+        SELECT 1 FROM {prefix}tokens t
+        WHERE t.chain = chain
+        AND t.address = LOWER(contract_address)
     );
+    """))
 
-    -- Now update relationships with the remaining tokens
+    # Update relationships with tokens
+    conn.execute(text(f"""
     UPDATE {prefix}token_reports r
     SET token_id = t.id
     FROM {prefix}tokens t
     WHERE r.token_chain = t.chain 
     AND LOWER(r.token_address) = t.address
     AND r.token_chain IS NOT NULL 
-    AND r.token_address IS NOT NULL;
+    AND r.token_address IS NOT NULL
+    AND r.token_id IS NULL;
 
     UPDATE {prefix}token_opportunities o
     SET token_id = t.id
@@ -169,12 +165,12 @@ def upgrade() -> None:
     WHERE o.chain = t.chain 
     AND LOWER(o.contract_address) = t.address
     AND o.chain IS NOT NULL 
-    AND o.contract_address IS NOT NULL;
+    AND o.contract_address IS NOT NULL
+    AND o.token_id IS NULL;
+    """))
 
-    -- Finally add the unique constraint now that duplicates are handled
-    ALTER TABLE {prefix}tokens
-    DROP CONSTRAINT IF EXISTS uq_{prefix}token_chain_address;
-    
+    # Add back the unique constraint
+    conn.execute(text(f"""
     ALTER TABLE {prefix}tokens
     ADD CONSTRAINT uq_{prefix}token_chain_address UNIQUE (chain, address);
     """))
