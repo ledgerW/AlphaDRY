@@ -31,6 +31,7 @@ class GraphState(TypedDict):
     research: Optional[List[ToolMessage]]
     token_report: Optional[IsTokenReport]
     transaction_data: Optional[TransactionData]
+    social_media_summary: Optional[str]
     alpha: Optional[TokenAlpha]
     review_feedback: Optional[str]
     next: str
@@ -105,6 +106,9 @@ Symbol: {token_report['token_symbol'] if token_report else 'Unknown'}
 Chain: {token_report['token_chain'] if token_report else 'Unknown'}
 Address: {token_report['token_address'] if token_report else 'Unknown'}
 
+Social Media Activity:
+{state.get('social_media_summary', 'No social media data available.')}
+
 IMPORTANT: You have limited tool usage available:
 - Quick Search: {quick_search_remaining} remaining
 - Deep Search: {deep_search_remaining} remaining
@@ -167,6 +171,8 @@ def generate_alpha(state: GraphState) -> GraphState:
     research = state['research']
     token_report = state['token_report']
     transaction_data = state['transaction_data']
+    social_media_summary = state.get('social_media_summary', 'No social media data available.')
+    
     prompt = ChatPromptTemplate.from_messages([
         SystemMessage(content="""You are an expert crypto analyst specializing in early-stage tokens.
 Your task is to analyze the research and determine if this token represents a good investment opportunity.
@@ -178,9 +184,15 @@ Key criteria:
 - Safe and audited contracts
 - Early stage with growth potential
 
+Consider both on-chain data and social media activity when evaluating community engagement and momentum.
+
 Only recommend tokens that meet these criteria and have strong supporting evidence."""),
         HumanMessage(content=f"""Token Report:
 {token_report}
+
+
+Social Media Summary:
+{social_media_summary}
 
 
 Research:
@@ -225,6 +237,7 @@ def reviewer(state: GraphState) -> GraphState:
     quick_search_remaining = 3 - state['quick_search_count']
     deep_search_remaining = 3 - state['deep_search_count']
     get_token_data_remaining = 2 - state['get_token_data_count']
+    social_media_summary = state.get('social_media_summary', 'No social media data available.')
     
     prompt = ChatPromptTemplate.from_messages([
         SystemMessage(content=f"""You are an expert crypto research reviewer focused on ensuring thorough analysis of token opportunities.
@@ -244,6 +257,10 @@ d) Make a clear recommendation based on evidence
 
 Token Report:
 {state['token_report']}
+
+
+Social Media Summary:
+{social_media_summary}
 
 
 Token Alpha:
@@ -323,11 +340,13 @@ agent_graph.name = "Multi-Agent Alpha Scout"
 def get_state(input_data):
     messages = [HumanMessage(content=msg) for msg in input_data.get('messages', [])]
     token_report = input_data.get('token_report')
+    social_media_summary = input_data.get('social_media_summary')
     
     return GraphState(
         messages=messages,
         research=None,
         token_report=token_report,
+        social_media_summary=social_media_summary,
         alpha=None,
         review_feedback=None,
         next='',

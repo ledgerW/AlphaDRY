@@ -116,10 +116,22 @@ async def get_multi_hop_seek_alpha(token: Token):
 )
 async def get_multi_agent_alpha_scout(token_report: IsTokenReport, token_report_id: int | None = None):
     try:
-        # Pass the token report to the alpha scout agent
+        # Get social media summary if token address is available
+        social_media_summary = None
+        if token_report.token_address:
+            try:
+                social_summary = await get_token_social_summary(token_report.token_address)
+                social_media_summary = social_summary.summary
+            except HTTPException as e:
+                if e.status_code != 404:  # Ignore 404s, but log other errors
+                    print(f"Error fetching social summary: {str(e)}")
+                pass
+        
+        # Pass the token report and social summary to the alpha scout agent
         token_alpha = await multi_agent_alpha_scout.ainvoke({
             'messages': [token_report.reasoning],
-            'token_report': token_report.dict()
+            'token_report': token_report.dict(),
+            'social_media_summary': social_media_summary
         })
         
         with get_session() as session:
