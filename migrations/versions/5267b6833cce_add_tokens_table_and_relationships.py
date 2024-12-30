@@ -104,26 +104,51 @@ def upgrade() -> None:
         """)
     ).scalar()
 
+    # Clean up any invalid references before adding constraints
+    conn.execute(
+        text(f"""
+        UPDATE {prefix}token_reports
+        SET token_id = NULL
+        WHERE token_id IS NOT NULL
+        AND token_id NOT IN (SELECT id FROM {prefix}tokens)
+        """)
+    )
+    
+    conn.execute(
+        text(f"""
+        UPDATE {prefix}token_opportunities
+        SET token_id = NULL
+        WHERE token_id IS NOT NULL
+        AND token_id NOT IN (SELECT id FROM {prefix}tokens)
+        """)
+    )
+
     # Add foreign key constraints if they don't exist
     if not fk_reports_exists:
-        op.create_foreign_key(
-            f'fk_{prefix}token_reports_token',
-            f'{prefix}token_reports',
-            f'{prefix}tokens',
-            ['token_id'],
-            ['id'],
-            ondelete='SET NULL'
-        )
+        try:
+            op.create_foreign_key(
+                f'fk_{prefix}token_reports_token',
+                f'{prefix}token_reports',
+                f'{prefix}tokens',
+                ['token_id'],
+                ['id'],
+                ondelete='SET NULL'
+            )
+        except Exception as e:
+            print(f"Warning: Could not create foreign key for {prefix}token_reports: {str(e)}")
 
     if not fk_opps_exists:
-        op.create_foreign_key(
-            f'fk_{prefix}token_opportunities_token',
-            f'{prefix}token_opportunities',
-            f'{prefix}tokens',
-            ['token_id'],
-            ['id'],
-            ondelete='SET NULL'
-        )
+        try:
+            op.create_foreign_key(
+                f'fk_{prefix}token_opportunities_token',
+                f'{prefix}token_opportunities',
+                f'{prefix}tokens',
+                ['token_id'],
+                ['id'],
+                ondelete='SET NULL'
+            )
+        except Exception as e:
+            print(f"Warning: Could not create foreign key for {prefix}token_opportunities: {str(e)}")
 
 
 def downgrade() -> None:
