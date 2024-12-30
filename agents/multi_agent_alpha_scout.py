@@ -213,7 +213,16 @@ Generate a detailed token opportunity analysis. Focus on safety and evidence-bas
     chain = prompt | llm
 
     result = chain.invoke({})
-    return {'alpha': result.tool_calls[0]['args']}
+    
+    # Extract the tool call arguments and ensure they match TokenAlpha model
+    if not result.tool_calls or not result.tool_calls[0]['args']:
+        raise ValueError("No alpha analysis generated")
+        
+    alpha_data = result.tool_calls[0]['args']
+    
+    # Create TokenAlpha instance to validate the data
+    token_alpha = TokenAlpha(**alpha_data)
+    return {'alpha': token_alpha.dict()}
 
 
 # Add this near the top with other models

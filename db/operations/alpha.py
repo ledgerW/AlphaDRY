@@ -69,7 +69,7 @@ def create_alpha_report(report_data: Dict[str, Any], existing_session=None) -> O
                         opp_data['chain'] = Chain.ETHEREUM
                 
                 
-                # Create opportunity with both relationships
+                # Create opportunity with all relationships
                 opportunity = TokenOpportunityDB(
                     name=opp_data.get('name'),
                     chain=opp_data.get('chain'),
@@ -91,6 +91,12 @@ def create_alpha_report(report_data: Dict[str, Any], existing_session=None) -> O
                 if token_report:
                     opportunity.token_report = token_report
                     token_report.opportunities.append(opportunity)
+                    
+                    # Set token relationship if token_report has a token
+                    if token_report.token:
+                        opportunity.token = token_report.token
+                        opportunity.token_id = token_report.token.id
+                        token_report.token.token_opportunities.append(opportunity)
                 
                 session.add(opportunity)
 

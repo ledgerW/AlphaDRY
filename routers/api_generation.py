@@ -114,14 +114,22 @@ async def get_multi_hop_seek_alpha(token: Token):
     dependencies=[Depends(api_key_auth)],
     response_model=TokenAlpha
 )
-async def get_multi_agent_alpha_scout(token_report: IsTokenReport, token_report_id: int | None = None):
+async def get_multi_agent_alpha_scout(data: dict):
     try:
+        # Extract token_report and token_report_id from request data
+        if 'token_report' not in data:
+            raise HTTPException(status_code=400, detail="token_report is required")
+        
+        # Create IsTokenReport instance from the data
+        token_report = IsTokenReport(**data['token_report'])
+        token_report_id = data.get('token_report_id')
+        
         # Get social media summary if token address is available
         social_media_summary = None
         if token_report.token_address:
             try:
                 social_summary = await get_token_social_summary(token_report.token_address)
-                social_media_summary = social_summary.summary
+                social_media_summary = f"Total Posts: {social_summary.total_posts}\n\n{social_summary.summary}"
             except HTTPException as e:
                 if e.status_code != 404:  # Ignore 404s, but log other errors
                     print(f"Error fetching social summary: {str(e)}")
@@ -134,6 +142,22 @@ async def get_multi_agent_alpha_scout(token_report: IsTokenReport, token_report_
             'social_media_summary': social_media_summary
         })
         
+        if not token_alpha:
+            raise HTTPException(
+                status_code=500,
+                detail="Alpha scout analysis returned no results"
+            )
+            
+        # Ensure we have a valid TokenAlpha object
+        if not isinstance(token_alpha, dict):
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid alpha scout result format"
+            )
+            
+        print("Alpha scout result:", token_alpha)  # Debug log
+        
+        # Save results to database
         with get_session() as session:
             try:
                 # If token_report_id is provided, get the TokenReportDB instance and verify it exists
@@ -183,7 +207,12 @@ async def get_multi_agent_alpha_scout(token_report: IsTokenReport, token_report_
                     # Verify relationships were properly established
                     if not token_report_db.opportunities:
                         print(f"Warning: Token report {token_report_id} has no opportunities after commit")
+                    
+                    # Refresh token to ensure opportunities are loaded
+                    if token_report_db.token:
+                        session.refresh(token_report_db.token)
                         
+                # Return the token alpha result
                 return token_alpha
                 
             except Exception as e:
@@ -313,7 +342,10 @@ async def analyze_and_scout(input_data: SocialMediaInput):
             )
             
             # Call the multi_agent_alpha_scout endpoint with token_report_id
-            token_alpha = await get_multi_agent_alpha_scout(token_report_model, token_report['id'])
+            token_alpha = await get_multi_agent_alpha_scout({
+                'token_report': token_report_model.dict(),
+                'token_report_id': token_report['id']
+            })
             return token_alpha
     
         # If no purchasable token found, return None

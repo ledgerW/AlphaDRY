@@ -101,13 +101,92 @@ export function showError(message) {
 }
 
 // Function to fetch alpha reports
-// Function to fetch a specific token's details
+// Function to fetch a specific token's details and latest report
 export async function fetchToken(address) {
-    const response = await fetch(`/api/token/${encodeURIComponent(address)}`);
+    const response = await fetch(`/api/token/${encodeURIComponent(address)}?include_latest_report=true`);
     if (!response.ok) {
         throw new Error(`Failed to fetch token: ${response.status}`);
     }
-    return response.json();
+    const data = await response.json();
+    
+    // Ensure we have the latest token report
+    if (!data.token_reports || data.token_reports.length === 0) {
+        throw new Error('No token reports available for this address');
+    }
+    
+    // Sort reports by date and get the latest
+    data.token_reports.sort((a, b) => {
+        const dateA = new Date(b.created_at || b.timestamp || 0);
+        const dateB = new Date(a.created_at || a.timestamp || 0);
+        return dateA - dateB;
+    });
+    
+    // Get the latest report and ensure all required fields are present
+    const latestReport = data.token_reports[0];
+    if (!latestReport) {
+        throw new Error('No valid token report found');
+    }
+
+    // Validate required fields
+    const requiredFields = [
+        'mentions_purchasable_token',
+        'token_symbol',
+        'token_chain',
+        'token_address',
+        'is_listed_on_dex',
+        'confidence_score',
+        'reasoning'
+    ];
+
+    for (const field of requiredFields) {
+        if (latestReport[field] === undefined || latestReport[field] === null) {
+            throw new Error(`Latest token report missing required field: ${field}`);
+        }
+    }
+
+    data.latest_report = latestReport;
+    return data;
+}
+
+export async function runTokenAlphaScout(tokenReport, tokenReportId) {
+    try {
+        const apiKey = document.querySelector('meta[name="api-key"]').content;
+        const response = await fetch('/api/multi_agent_alpha_scout', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-key': apiKey
+            },
+            body: JSON.stringify({
+                token_report: {
+                    mentions_purchasable_token: tokenReport.mentions_purchasable_token,
+                    token_symbol: tokenReport.token_symbol,
+                    token_chain: tokenReport.token_chain,
+                    token_address: tokenReport.token_address,
+                    is_listed_on_dex: tokenReport.is_listed_on_dex,
+                    trading_pairs: tokenReport.trading_pairs || [],
+                    confidence_score: tokenReport.confidence_score,
+                    reasoning: tokenReport.reasoning
+                },
+                token_report_id: tokenReportId
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || 'Failed to run alpha scout');
+        }
+
+        const result = await response.json();
+        
+        // Add a small delay to ensure database operations complete
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        return result;
+    } catch (error) {
+        console.error('Error running alpha scout:', error);
+        throw error;
+    }
 }
 
 export async function fetchAlphaReports(date = null) {
