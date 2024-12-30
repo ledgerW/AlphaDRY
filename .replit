@@ -53,7 +53,7 @@ run = ["sh", "-c", """
 if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
     # Production deployment
     pip install -r requirements.txt &&
-    alembic upgrade head &&  # Will apply any new migrations, or do nothing if already at head
+    REPLIT_DEPLOYMENT=1 alembic upgrade head &&  # Explicitly set for alembic to use prod_ tables
     uvicorn main:app --host 0.0.0.0 --port 80
 else
     # Development setup
