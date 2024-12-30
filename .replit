@@ -54,7 +54,10 @@ if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
     # Production: Install deps and run migrations (preserves prod_ tables)
     pip install -r requirements.txt &&
     
-    # Run cleanup scripts first to handle any existing data issues
+    # Drop warpcasts tables first since we don't need them
+    psql $DATABASE_URL -f db/scripts/cleanup_warpcasts.sql &&
+    
+    # Run cleanup scripts to handle any existing data issues
     psql $DATABASE_URL -f db/scripts/cleanup_foreign_keys.sql &&
     psql $DATABASE_URL -f db/scripts/cleanup_null_addresses.sql &&
     psql $DATABASE_URL -f db/scripts/cleanup_token_duplicates.sql &&
