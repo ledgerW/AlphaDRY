@@ -54,16 +54,18 @@ if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
     # Production: Install deps and run migrations (preserves prod_ tables)
     pip install -r requirements.txt &&
     
-    # Run deployment safety SQL first
-    psql $DATABASE_URL -f db/deployment_safety.sql &&
-    
-    # Run cleanup scripts
-    psql $DATABASE_URL -f db/scripts/cleanup_backups.sql &&
+    # Run cleanup scripts first to handle any existing data issues
     psql $DATABASE_URL -f db/scripts/cleanup_foreign_keys.sql &&
     psql $DATABASE_URL -f db/scripts/cleanup_null_addresses.sql &&
     psql $DATABASE_URL -f db/scripts/cleanup_token_duplicates.sql &&
     
-    # Run all migrations up to head
+    # Then run deployment safety SQL to create backups
+    psql $DATABASE_URL -f db/deployment_safety.sql &&
+    
+    # Clean up old backups
+    psql $DATABASE_URL -f db/scripts/cleanup_backups.sql &&
+    
+    # Finally run migrations
     alembic upgrade head &&
     
     uvicorn main:app --host 0.0.0.0 --port 80

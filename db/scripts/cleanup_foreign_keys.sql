@@ -59,6 +59,7 @@ BEGIN
             table_name,
             column_name,
             column_name,
+            column_name,
             table_name,
             referenced_table,
             column_name,
