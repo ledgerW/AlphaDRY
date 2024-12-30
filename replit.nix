@@ -4,6 +4,7 @@
     pkgs.postgresql
     pkgs.libxcrypt
     pkgs.bash
+    pkgs.netcat
     pkgs.glibcLocales
     pkgs.rustc
     pkgs.libiconv

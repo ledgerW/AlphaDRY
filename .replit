@@ -50,35 +50,85 @@ waitForPort = 80
 
 [deployment]
 run = ["sh", "-c", """
+set -e  # Exit on any error
+
+log() {
+    echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] $1"
+}
+
+handle_error() {
+    log "ERROR: Deployment failed at step: $1"
+    exit 1
+}
+
+wait_for_port() {
+    local port=$1
+    local timeout=$2
+    local start_time=$(date +%s)
+    
+    while ! nc -z localhost $port; do
+        if [ $(($(date +%s) - start_time)) -gt $timeout ]; then
+            log "ERROR: Timed out waiting for port $port"
+            return 1
+        fi
+        sleep 1
+    done
+    return 0
+}
+
 if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
-    # Production: Install deps and run migrations (preserves prod_ tables)
-    pip install -r requirements.txt &&
+    # Phase 1: Install dependencies
+    log "Installing dependencies..."
+    pip install -r requirements.txt || handle_error "pip install"
     
-    # Drop warpcasts tables first since we don't need them
-    psql $DATABASE_URL -f db/scripts/cleanup_warpcasts.sql &&
+    # Phase 2: Database cleanup
+    log "Starting database cleanup..."
     
-    # Run cleanup scripts to handle any existing data issues
-    psql $DATABASE_URL -f db/scripts/fix_token_reference.sql &&
-    psql $DATABASE_URL -f db/scripts/cleanup_foreign_keys.sql &&
-    psql $DATABASE_URL -f db/scripts/cleanup_null_addresses.sql &&
-    psql $DATABASE_URL -f db/scripts/cleanup_token_duplicates.sql &&
+    # Drop warpcasts tables first
+    log "Dropping warpcasts tables..."
+    psql $DATABASE_URL -f db/scripts/cleanup_warpcasts.sql || handle_error "cleanup_warpcasts"
     
-    # Run deployment safety SQL to create backups
-    psql $DATABASE_URL -f db/deployment_safety.sql &&
+    # Run cleanup scripts sequentially
+    for script in fix_token_reference cleanup_foreign_keys cleanup_null_addresses cleanup_token_duplicates; do
+        log "Running cleanup script: $script..."
+        psql $DATABASE_URL -f "db/scripts/${script}.sql" || handle_error "$script"
+    done
     
-    # Clean up old backups
-    psql $DATABASE_URL -f db/scripts/cleanup_backups.sql &&
+    # Phase 3: Backup and safety
+    log "Creating database backups..."
+    psql $DATABASE_URL -f db/deployment_safety.sql || handle_error "deployment_safety"
     
-    # Run migrations after backups are in place
-    alembic upgrade head &&
+    log "Cleaning up old backups..."
+    psql $DATABASE_URL -f db/scripts/cleanup_backups.sql || handle_error "cleanup_backups"
     
-    uvicorn main:app --host 0.0.0.0 --port 80
+    # Phase 4: Database migrations
+    log "Running database migrations..."
+    alembic upgrade head || handle_error "alembic_upgrade"
+    
+    # Phase 5: Start server
+    log "Starting FastAPI server..."
+    # Run uvicorn in background and capture PID
+    uvicorn main:app --host 0.0.0.0 --port 80 &
+    UVICORN_PID=$!
+    
+    # Wait up to 30 seconds for server to start
+    if ! wait_for_port 80 30; then
+        kill $UVICORN_PID 2>/dev/null || true
+        handle_error "server_startup"
+    fi
+    
+    # Keep running until server exits
+    wait $UVICORN_PID
 else
-    # Development: Install deps, reset dev_ tables, run migrations
-    pip install -r requirements.txt &&
-    python -c 'from database import reset_db; reset_db()' &&
-    alembic upgrade head &&
-    uvicorn main:app --host 0.0.0.0 --port 80
+    # Development environment
+    log "Setting up development environment..."
+    
+    pip install -r requirements.txt || handle_error "pip install"
+    python -c 'from database import reset_db; reset_db()' || handle_error "reset_db"
+    alembic upgrade head || handle_error "alembic_upgrade"
+    
+    log "Starting development server..."
+    uvicorn main:app --host 0.0.0.0 --port 80 --reload
 fi
 """]
 build = ["sh", "-c", "pip install -r requirements.txt"]
