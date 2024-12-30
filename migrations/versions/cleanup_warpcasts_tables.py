@@ -8,7 +8,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic
 revision = 'cleanup_warpcasts_tables'
-down_revision = 'drop_warpcasts_tables'  # Points to the previous migration
+down_revision = '084ce25df2a2'  # Points to the merge migration
 branch_labels = None
 depends_on = None
 

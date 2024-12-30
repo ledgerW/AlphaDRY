@@ -57,10 +57,9 @@ if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
     # Run deployment safety SQL first
     psql $DATABASE_URL -f db/deployment_safety.sql &&
     
-    # Clean up tokens without addresses
+    # Run cleanup scripts
+    psql $DATABASE_URL -f db/scripts/cleanup_backups.sql &&
     psql $DATABASE_URL -f db/scripts/cleanup_null_addresses.sql &&
-    
-    # Clean up duplicate tokens
     psql $DATABASE_URL -f db/scripts/cleanup_token_duplicates.sql &&
     
     # Run all migrations up to head
