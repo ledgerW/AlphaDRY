@@ -51,11 +51,9 @@ waitForPort = 80
 [deployment]
 run = ["sh", "-c", """
 if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
-    # Install dependencies and run migrations
+    # Production deployment
     pip install -r requirements.txt &&
-    alembic upgrade head &&
-    
-    # Start the server
+    alembic upgrade head &&  # Will apply any new migrations, or do nothing if already at head
     uvicorn main:app --host 0.0.0.0 --port 80
 else
     # Development setup
