@@ -58,16 +58,13 @@ if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
     psql $DATABASE_URL -f db/deployment_safety.sql &&
     
     # Clean up tokens without addresses
-    psql $DATABASE_URL -f cleanup_null_addresses.sql &&
+    psql $DATABASE_URL -f db/scripts/cleanup_null_addresses.sql &&
     
     # Clean up duplicate tokens
-    psql $DATABASE_URL -f cleanup_token_duplicates.sql &&
+    psql $DATABASE_URL -f db/scripts/cleanup_token_duplicates.sql &&
     
-    # Stamp the current migration version to sync with dev
-    alembic stamp convert_chain_to_string &&
-    
-    # Verify database state
-    alembic current &&
+    # Run all migrations up to head
+    alembic upgrade head &&
     
     uvicorn main:app --host 0.0.0.0 --port 80
 else
