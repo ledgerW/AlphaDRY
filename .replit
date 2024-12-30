@@ -58,6 +58,7 @@ if [ \"$REPLIT_DEPLOYMENT\" = \"1\" ]; then
     psql $DATABASE_URL -f db/scripts/cleanup_warpcasts.sql &&
     
     # Run cleanup scripts to handle any existing data issues
+    psql $DATABASE_URL -f db/scripts/fix_token_reference.sql &&
     psql $DATABASE_URL -f db/scripts/cleanup_foreign_keys.sql &&
     psql $DATABASE_URL -f db/scripts/cleanup_null_addresses.sql &&
     psql $DATABASE_URL -f db/scripts/cleanup_token_duplicates.sql &&
