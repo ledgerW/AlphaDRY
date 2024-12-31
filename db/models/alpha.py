@@ -52,7 +52,7 @@ class AlphaReportDB(SQLModel, table=True):
     id: Optional[int] = Field(
         sa_column=Column(
             Integer,
-            Sequence(f'"{get_env_prefix()}alpha_reports_id_seq"'),
+            Sequence(f'{get_env_prefix()}alpha_reports_id_seq'),
             primary_key=True,
             nullable=False
         )

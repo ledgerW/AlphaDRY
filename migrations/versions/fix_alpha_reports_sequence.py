@@ -23,23 +23,11 @@ def upgrade() -> None:
     # Create sequence if it doesn't exist
     op.execute(f'CREATE SEQUENCE IF NOT EXISTS "{prefix}alpha_reports_id_seq"')
     
-    # Set sequence as default for id column
+    # Set sequence as default and ownership
     op.execute(f"""
-        ALTER TABLE {prefix}alpha_reports 
-        ALTER COLUMN id SET DEFAULT nextval('{prefix}alpha_reports_id_seq'::regclass)
-    """)
-    
-    # Set sequence ownership
-    op.execute(f"""
-        ALTER SEQUENCE "{prefix}alpha_reports_id_seq" 
-        OWNED BY {prefix}alpha_reports.id
-    """)
-    
-    # Initialize sequence value based on existing data
-    op.execute(f"""
-        SELECT setval('{prefix}alpha_reports_id_seq', 
-                     COALESCE((SELECT MAX(id) FROM {prefix}alpha_reports), 0) + 1, 
-                     false)
+        ALTER TABLE {prefix}alpha_reports ALTER COLUMN id SET DEFAULT nextval('{prefix}alpha_reports_id_seq'::regclass);
+        ALTER SEQUENCE {prefix}alpha_reports_id_seq OWNED BY {prefix}alpha_reports.id;
+        SELECT setval('{prefix}alpha_reports_id_seq', COALESCE((SELECT MAX(id) FROM {prefix}alpha_reports), 0) + 1, false)
     """)
 
 def downgrade() -> None:

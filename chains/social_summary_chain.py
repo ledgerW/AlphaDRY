@@ -1,6 +1,7 @@
 from langchain.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain.chains import LLMChain
+from langchain_core.output_parsers import StrOutputParser
 
 # Create prompt template for summarizing social media posts
 prompt = ChatPromptTemplate.from_messages([
@@ -22,4 +23,5 @@ prompt = ChatPromptTemplate.from_messages([
 
 llm = ChatOpenAI(temperature=0.1, model="gpt-4o", streaming=True, name='social_summary_llm')
 # Create the chain
-social_summary_chain = (prompt | llm).with_config({"run_name": "Social Summary"})
+# Extract the text content from the AIMessage
+social_summary_chain = (prompt | llm | StrOutputParser()).with_config({"run_name": "Social Summary"})

@@ -30,7 +30,10 @@ class TokenDB(SQLModel, table=True):
         return v
         
     @validator('address', pre=True)
-    def validate_address(cls, v):
+    def validate_address(cls, v, values):
         if v is not None:
-            return v.lower()
+            # Only lowercase address for non-Solana chains
+            chain = values.get('chain')
+            if chain and chain.lower() != 'solana':
+                return v.lower()
         return v

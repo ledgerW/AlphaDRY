@@ -16,22 +16,34 @@ branch_labels = None
 depends_on = None
 
 def upgrade() -> None:
-    # Convert all token addresses to lowercase across different tables
-    op.execute(text("""
-        -- Convert addresses in tokens table
-        UPDATE prod_tokens 
+    from database import get_env_prefix
+    prefix = get_env_prefix()
+    
+    # Convert addresses to lowercase only for non-Solana chains
+    # Update tokens table
+    op.execute(text(f"""
+        UPDATE {prefix}tokens t
         SET address = LOWER(address) 
-        WHERE address IS NOT NULL;
-        
-        -- Convert contract_addresses in token_opportunities table
-        UPDATE prod_token_opportunities 
+        WHERE address IS NOT NULL 
+        AND LOWER(t.chain) != 'solana';
+    """))
+    
+    # Update token_opportunities table
+    op.execute(text(f"""
+        UPDATE {prefix}token_opportunities o
         SET contract_address = LOWER(contract_address) 
-        WHERE contract_address IS NOT NULL;
-        
-        -- Convert token_addresses in token_reports table
-        UPDATE prod_token_reports 
+        WHERE contract_address IS NOT NULL 
+        AND LOWER(o.chain) != 'solana';
+    """))
+    
+    # Update token_reports table - join with tokens to get chain info
+    op.execute(text(f"""
+        UPDATE {prefix}token_reports r
         SET token_address = LOWER(token_address) 
-        WHERE token_address IS NOT NULL;
+        FROM {prefix}tokens t
+        WHERE r.token_address IS NOT NULL 
+        AND r.token_address = t.address
+        AND LOWER(t.chain) != 'solana';
     """))
 
 def downgrade() -> None:

@@ -3,6 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
 from dotenv import load_dotenv
+import sqlalchemy as sa
 
 from chains.seek_alpha_chain import base_seek_alpha, multi_hop_seek_alpha
 from chains.alpha_chain import Alpha
@@ -42,8 +43,15 @@ async def get_token_social_summary(token_address: str):
     """Get a summary of all social media posts related to a token"""
     try:
         with get_session() as session:
-            # Get token from database (case-insensitive lookup)
-            token = session.query(TokenDB).filter(TokenDB.address == token_address.lower()).first()
+            # Get token from database (case-sensitive for Solana, case-insensitive for others)
+            token = session.query(TokenDB).filter(
+                sa.or_(
+                    # For Solana: exact match
+                    sa.and_(TokenDB.chain == 'solana', TokenDB.address == token_address),
+                    # For other chains: case-insensitive match
+                    sa.and_(TokenDB.chain != 'solana', TokenDB.address == token_address.lower())
+                )
+            ).first()
             if not token:
                 raise HTTPException(
                     status_code=404,
@@ -77,7 +85,7 @@ async def get_token_social_summary(token_address: str):
             })
             
             return SocialMediaSummary(
-                summary=summary_result["text"],
+                summary=summary_result,  # summary_result is already the text content
                 total_posts=len(social_posts)
             )
             
