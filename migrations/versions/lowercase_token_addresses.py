@@ -11,7 +11,7 @@ from sqlalchemy.sql import text
 
 # revision identifiers, used by Alembic.
 revision = 'lowercase_token_addresses'
-down_revision = 'lowercase_chain_values'
+down_revision = 'add_missing_prod_sequences'
 branch_labels = None
 depends_on = None
 
@@ -19,17 +19,17 @@ def upgrade() -> None:
     # Convert all token addresses to lowercase across different tables
     op.execute(text("""
         -- Convert addresses in tokens table
-        UPDATE tokens 
+        UPDATE prod_tokens 
         SET address = LOWER(address) 
         WHERE address IS NOT NULL;
         
         -- Convert contract_addresses in token_opportunities table
-        UPDATE token_opportunities 
+        UPDATE prod_token_opportunities 
         SET contract_address = LOWER(contract_address) 
         WHERE contract_address IS NOT NULL;
         
         -- Convert token_addresses in token_reports table
-        UPDATE token_reports 
+        UPDATE prod_token_reports 
         SET token_address = LOWER(token_address) 
         WHERE token_address IS NOT NULL;
     """))

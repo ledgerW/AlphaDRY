@@ -1,5 +1,6 @@
 from .base import *
 from .token import TokenDB
+from pydantic import validator
 
 class SocialMediaPostDB(SQLModel, table=True):
     """Database model for social media posts"""
