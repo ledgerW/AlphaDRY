@@ -1,5 +1,5 @@
 from langchain.prompts import ChatPromptTemplate
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.chains import LLMChain
 
 # Create prompt template for summarizing social media posts
@@ -20,8 +20,6 @@ prompt = ChatPromptTemplate.from_messages([
     {posts}""")
 ])
 
+llm = ChatOpenAI(temperature=0.1, model="gpt-4o", streaming=True, name='social_summary_llm')
 # Create the chain
-social_summary_chain = LLMChain(
-    llm=ChatOpenAI(temperature=0.1, model="gpt-4o", streaming=True, name='social_summary_llm'),
-    prompt=prompt
-).with_config({"run_name": "Social Summary"})
+social_summary_chain = (prompt | llm).with_config({"run_name": "Social Summary"})
