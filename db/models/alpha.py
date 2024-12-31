@@ -1,7 +1,7 @@
 from .base import *
 from agents.models import Chain
 from pydantic import validator
-from sqlalchemy import String
+from sqlalchemy import String, Integer, Sequence
 from .social import TokenReportDB
 from .token import TokenDB
 
@@ -43,7 +43,14 @@ class AlphaReportDB(SQLModel, table=True):
     """Database model for alpha reports"""
     __tablename__ = f"{get_env_prefix()}alpha_reports"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[int] = Field(
+        sa_column=Column(
+            Integer,
+            Sequence(f"{get_env_prefix()}alpha_reports_id_seq"),
+            primary_key=True,
+            nullable=False
+        )
+    )
     is_relevant: bool
     analysis: str
     message: str  # Original message input
