@@ -1,7 +1,7 @@
 """fix_alpha_reports_sequence
 
 Revision ID: fix_alpha_reports_sequence
-Revises: 084ce25df2a2
+Revises: merge_token_and_warpcast_heads
 Create Date: 2024-12-31 00:00:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'fix_alpha_reports_sequence'
-down_revision: Union[str, None] = ('084ce25df2a2',)
+down_revision: Union[str, None] = ('merge_token_and_warpcast_heads',)
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
