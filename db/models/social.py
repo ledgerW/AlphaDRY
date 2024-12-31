@@ -54,3 +54,9 @@ class TokenReportDB(SQLModel, table=True):
     # Relationship with Token
     token_id: Optional[int] = Field(default=None, foreign_key=f"{get_env_prefix()}tokens.id")
     token: Optional["TokenDB"] = Relationship(back_populates="token_reports")
+    
+    @validator('token_address', pre=True)
+    def validate_token_address(cls, v):
+        if v is not None:
+            return v.lower()
+        return v

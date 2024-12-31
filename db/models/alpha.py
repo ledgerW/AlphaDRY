@@ -38,6 +38,12 @@ class TokenOpportunityDB(SQLModel, table=True):
         if isinstance(v, Chain):
             return v.value  # Use the enum value (lowercase string)
         return v
+        
+    @validator('contract_address', pre=True)
+    def validate_contract_address(cls, v):
+        if v is not None:
+            return v.lower()
+        return v
 
 class AlphaReportDB(SQLModel, table=True):
     """Database model for alpha reports"""
@@ -46,7 +52,7 @@ class AlphaReportDB(SQLModel, table=True):
     id: Optional[int] = Field(
         sa_column=Column(
             Integer,
-            Sequence(f"{get_env_prefix()}alpha_reports_id_seq"),
+            Sequence(f'"{get_env_prefix()}alpha_reports_id_seq"'),
             primary_key=True,
             nullable=False
         )

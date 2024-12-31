@@ -28,3 +28,9 @@ class TokenDB(SQLModel, table=True):
         if isinstance(v, Chain):
             return v.value
         return v
+        
+    @validator('address', pre=True)
+    def validate_address(cls, v):
+        if v is not None:
+            return v.lower()
+        return v

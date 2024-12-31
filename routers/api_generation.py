@@ -42,8 +42,8 @@ async def get_token_social_summary(token_address: str):
     """Get a summary of all social media posts related to a token"""
     try:
         with get_session() as session:
-            # Get token from database
-            token = session.query(TokenDB).filter(TokenDB.address == token_address).first()
+            # Get token from database (case-insensitive lookup)
+            token = session.query(TokenDB).filter(TokenDB.address == token_address.lower()).first()
             if not token:
                 raise HTTPException(
                     status_code=404,
