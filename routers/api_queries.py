@@ -4,15 +4,51 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import joinedload
-from sqlalchemy import desc, func, and_, or_, not_
+from sqlalchemy import desc, func, and_, or_, not_, select
 
 from database import (
     TokenDB, AlphaReportDB, TokenOpportunityDB, TokenReportDB, 
     SocialMediaPostDB, get_session
 )
+from datetime import datetime
 from .api_models import AlphaReport, TokenOpportunity, TokenData
 
 router = APIRouter(tags=["queries"])
+
+@router.get("/latest_warpcast/{username}")
+async def get_latest_warpcast(username: str):
+    """Get the timestamp of the latest processed warpcast for a user"""
+    try:
+        with get_session() as session:
+            # Query for the latest post by this user
+            query = select(SocialMediaPostDB).where(
+                SocialMediaPostDB.author_username == username,
+                SocialMediaPostDB.source == "warpcast"
+            ).order_by(desc(SocialMediaPostDB.original_timestamp)).limit(1)
+            
+            result = session.execute(query).first()
+            
+            if result:
+                # Return the timestamp of the latest post
+                post = result[0]
+                return {
+                    "username": username,
+                    "latest_timestamp": post.original_timestamp.isoformat(),
+                    "post_id": post.post_id
+                }
+            
+            # If no posts found, return a very old date
+            return {
+                "username": username,
+                "latest_timestamp": datetime(2000, 1, 1).isoformat(),
+                "post_id": None
+            }
+            
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch latest warpcast: {str(e)}"
+        )
 
 @router.get("/alpha_reports")
 async def get_alpha_reports(date: Optional[str] = None):

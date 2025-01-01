@@ -21,10 +21,6 @@ from datetime import datetime
 from farcaster import Warpcast
 from dotenv import load_dotenv
 import logging
-from sqlalchemy import select, desc
-from db.connection import get_engine
-from db.models.social import SocialMediaPostDB
-from sqlalchemy.orm import Session
 
 # Load environment variables
 load_dotenv()
@@ -39,16 +35,9 @@ logging.basicConfig(
     ]
 )
 
-# Log environment and verify table prefix
+# Log environment
 env = "prod" if args.prod else "dev"
-logging.info(f"Running against {env} database tables ({env}_prefix)")
-
-# Verify table prefix by checking the model's __tablename__
-table_name = SocialMediaPostDB.__tablename__
-if not table_name.startswith(f"{env}_"):
-    logging.error(f"Incorrect table prefix! Expected {env}_ but got {table_name}")
-    sys.exit(1)
-logging.info(f"Verified table name: {table_name}")
+logging.info(f"Running in {env} environment")
 
 PRIMARY_USER = 'drypowder'
 PRIMARY_USER_FID = 887822
@@ -124,44 +113,23 @@ async def process_cast(session, api_url, headers, cast, client, total_processed,
         logging.error(f"Error processing cast: {e}")
         return False
 
-def get_latest_post_timestamp(username: str) -> datetime:
+async def get_latest_post_timestamp(session: aiohttp.ClientSession, api_url: str, headers: dict, username: str) -> datetime:
     """Get the timestamp of the latest processed post for a user"""
     try:
-        # Get a fresh engine instance to ensure we use the current environment
-        engine = get_engine()
-        logging.info(f"Using database engine with table prefix: {SocialMediaPostDB.__tablename__}")
-        with Session(engine) as db_session:
-            # Query for the latest post by this user
-            query = select(SocialMediaPostDB).where(
-                SocialMediaPostDB.author_username == username,
-                SocialMediaPostDB.source == "warpcast"
-            ).order_by(desc(SocialMediaPostDB.original_timestamp)).limit(1)
-            
-            # Log the raw SQL query for debugging
-            compiled_query = query.compile(compile_kwargs={"literal_binds": True})
-            logging.info(f"Executing query for {username}: {compiled_query}")
-            result = db_session.execute(query).first()
-            
-            if result:
-                # Access the SocialMediaPostDB object and its original_timestamp field
-                post = result[0]
-                logging.info(f"Found post for {username}:")
-                logging.info(f"  - ID: {post.id}")
-                logging.info(f"  - Post ID: {post.post_id}")
-                logging.info(f"  - Original timestamp: {post.original_timestamp}")
-                logging.info(f"  - Processing timestamp: {post.timestamp}")
-                return post.original_timestamp
+        async with session.get(f"{api_url}/api/latest_warpcast/{username}", headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                latest_timestamp = datetime.fromisoformat(data["latest_timestamp"])
+                logging.info(f"Found latest post timestamp for {username}: {latest_timestamp}")
+                return latest_timestamp
             else:
-                logging.info(f"No posts found in database for {username}")
-            
-            # If no posts found, return a very old date to process all posts
-            return datetime(2000, 1, 1)
+                logging.error(f"Error from API: {response.status}")
+                return datetime(2000, 1, 1)
     except Exception as e:
         logging.error(f"Error getting latest post timestamp for {username}: {e}")
-        # On error, return a very old date to process all posts
         return datetime(2000, 1, 1)
 
-async def process_user(session, api_url, headers, username, client, total_casts_target, total_processed, total_opportunities):
+async def process_user(session: aiohttp.ClientSession, api_url: str, headers: dict, username: str, client, total_casts_target: int, total_processed: list, total_opportunities: list):
     """Process casts for a single user"""
     try:
         logging.info(f"\nProcessing user: {username}")
@@ -182,7 +150,7 @@ async def process_user(session, api_url, headers, username, client, total_casts_
         user_opportunities_found = 0
         
         # Get latest processed post timestamp for this user
-        latest_timestamp = get_latest_post_timestamp(username)
+        latest_timestamp = await get_latest_post_timestamp(session, api_url, headers, username)
         logging.info(f"Latest processed post timestamp for {username}: {latest_timestamp}")
         
         # Process casts sequentially to maintain 5-second buffer between API calls
