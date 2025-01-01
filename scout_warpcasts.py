@@ -50,10 +50,10 @@ if not table_name.startswith(f"{env}_"):
     sys.exit(1)
 logging.info(f"Verified table name: {table_name}")
 
-#PRIMARY_USER = 'drypowder'
-#PRIMARY_USER_FID = 887822
-PRIMARY_USER = 'ledgerwest.eth'
-PRIMARY_USER_FID = 383351
+PRIMARY_USER = 'drypowder'
+PRIMARY_USER_FID = 887822
+#PRIMARY_USER = 'ledgerwest.eth'
+#PRIMARY_USER_FID = 383351
 
 async def get_following_usernames(client):
     """Get list of usernames that PRIMARY_USER is following"""
