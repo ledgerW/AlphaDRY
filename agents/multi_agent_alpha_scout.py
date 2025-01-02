@@ -178,7 +178,6 @@ def generate_alpha(state: GraphState) -> GraphState:
 Your task is to analyze the research and determine if this token represents a good investment opportunity.
 
 Key criteria:
-- Market cap below $5M
 - Active and reputable community
 - Trading momentum (are we early or late in the cycle?)
 - Safe and audited contracts
