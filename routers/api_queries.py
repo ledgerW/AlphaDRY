@@ -247,7 +247,7 @@ async def get_tokens():
         with get_session() as session:
             tokens = session.query(TokenDB)\
                 .filter(TokenDB.address.isnot(None))\
-                .filter(TokenDB.chain.in_(['base', 'solana']))\
+                .filter(func.lower(TokenDB.chain).in_(['base', 'solana']))\
                 .order_by(desc(TokenDB.created_at))\
                 .options(
                     joinedload(TokenDB.token_reports).joinedload(TokenReportDB.social_media_post),

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
 from dotenv import load_dotenv
 import sqlalchemy as sa
+from sqlalchemy import desc, func, and_, or_, not_, select
 
 from chains.seek_alpha_chain import base_seek_alpha, multi_hop_seek_alpha
 from chains.alpha_chain import Alpha
@@ -49,7 +50,7 @@ async def get_token_social_summary(token_address: str):
                     # For Solana: exact match
                     sa.and_(TokenDB.chain == 'solana', TokenDB.address == token_address),
                     # For other chains: case-insensitive match
-                    sa.and_(TokenDB.chain != 'solana', TokenDB.address == token_address.lower())
+                    sa.and_(TokenDB.chain != 'solana', func.lower(TokenDB.address) == token_address.lower())
                 )
             ).first()
             if not token:
