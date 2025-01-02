@@ -11,18 +11,23 @@ CREATE TEMP TABLE token_mapping (
 
 -- Identify duplicates and decide which ones to keep (most recently created)
 WITH duplicates AS (
-    SELECT MIN(id) as keep_id,
-           array_agg(id) as all_ids
-    FROM prod_tokens
+    SELECT DISTINCT ON (LOWER(chain), LOWER(address))
+           id as keep_id,
+           ARRAY(
+               SELECT t2.id 
+               FROM prod_tokens t2 
+               WHERE LOWER(t2.chain) = LOWER(t1.chain) 
+               AND LOWER(t2.address) = LOWER(t1.address)
+               AND t2.id != t1.id
+           ) as ids_to_remove
+    FROM prod_tokens t1
     WHERE address IS NOT NULL
-    GROUP BY LOWER(chain), LOWER(address)
-    HAVING COUNT(*) > 1
+    ORDER BY LOWER(chain), LOWER(address), created_at DESC
 )
-INSERT INTO token_mapping
-SELECT unnest(all_ids) as old_token_id,
-       keep_id as new_token_id
+INSERT INTO token_mapping (old_token_id, new_token_id)
+SELECT unnest(ids_to_remove), keep_id
 FROM duplicates
-WHERE unnest(all_ids) != keep_id;
+WHERE array_length(ids_to_remove, 1) > 0;
 
 -- Update token reports to point to the surviving tokens
 UPDATE prod_token_reports
