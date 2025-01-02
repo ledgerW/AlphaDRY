@@ -259,9 +259,9 @@ async def analyze_social_post(input_data: SocialMediaInput, existing_session=Non
             "text": input_data.text,
             "original_timestamp": input_data.original_timestamp or datetime.utcnow(),  # Use current time if not provided
             "timestamp": datetime.utcnow(),  # When we process the post
-            "reactions_count": 0,
-            "replies_count": 0,
-            "reposts_count": 0,
+            "reactions_count": input_data.reactions_count,
+            "replies_count": input_data.replies_count,
+            "reposts_count": input_data.reposts_count,
             "raw_data": raw_data  # Use the serialized version
         }
         
