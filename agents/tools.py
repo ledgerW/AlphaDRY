@@ -45,14 +45,18 @@ def extract_token_data(token_symbol: str, pool_data: dict) -> Optional[TokenData
     if not pool_data.get('data'):
         return None
         
-    pool_name = pool_data['data'][0]['attributes']['name']
-    chain = pool_data['data'][0]['relationships']['base_token']['data']['id'].split('_')[0]
-    address = pool_data['data'][0]['relationships']['base_token']['data']['id'].split('_')[1]
-    attributes = pool_data['data'][0]['attributes']
-    
-    # Extract symbol from pool name (e.g. "CLANKER / WETH 1%" -> "CLANKER")
-    symbol = pool_name.split('/')[0].strip()
-    if token_symbol.lower() not in [symbol.lower(), address.lower()]:
+    for pool in pool_data['data']:
+        pool_name = pool['attributes']['name']
+        chain = pool['relationships']['base_token']['data']['id'].split('_')[0]
+        address = pool['relationships']['base_token']['data']['id'].split('_')[1]
+        attributes = pool['attributes']
+        
+        # Extract symbol from pool name (e.g. "CLANKER / WETH 1%" -> "CLANKER")
+        symbol = pool_name.split('/')[0].strip()
+        if token_symbol.lower() in [symbol.lower(), address.lower()]:
+            break
+    else:
+        # Loop completed without finding a match
         return None
         
     transaction_data = extract_token_transaction_data(attributes)
