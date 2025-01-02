@@ -109,7 +109,7 @@ Address: {token_report['token_address'] if token_report else 'Unknown'}
 Social Media Activity:
 {state.get('social_media_summary', 'No social media data available.')}
 
-IMPORTANT: You have limited tool usage available:
+IMPORTANT: You have limited tool usage available, and should use Get Token Data at least once.
 - Quick Search: {quick_search_remaining} remaining
 - Deep Search: {deep_search_remaining} remaining
 - Get Token Data: {get_token_data_remaining} remaining

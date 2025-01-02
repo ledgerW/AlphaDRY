@@ -81,6 +81,26 @@
             font-size: 0.9em;
         }
 
+        .social-metrics {
+            display: flex;
+            gap: 15px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(0, 255, 136, 0.2);
+            margin-top: 10px;
+        }
+
+        .metric {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: rgba(0, 255, 136, 0.8);
+            font-size: 0.85em;
+        }
+
+        .metric-icon {
+            opacity: 0.8;
+        }
+
         .token-header {
             padding: 20px;
             background: rgba(0, 0, 0, 0.7);
@@ -326,6 +346,20 @@
                     </div>
                     <div class="social-post-content">${escapeHtml(socialPost.text)}</div>
                     <div class="social-post-author">@${escapeHtml(socialPost.author_display_name)}</div>
+                    <div class="social-metrics">
+                        <div class="metric">
+                            <span class="metric-icon">❤️</span>
+                            ${socialPost.reactions_count || 0}
+                        </div>
+                        <div class="metric">
+                            <span class="metric-icon">💬</span>
+                            ${socialPost.replies_count || 0}
+                        </div>
+                        <div class="metric">
+                            <span class="metric-icon">🔄</span>
+                            ${socialPost.reposts_count || 0}
+                        </div>
+                    </div>
                 </div>
             `;
         }

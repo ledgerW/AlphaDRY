@@ -6,11 +6,66 @@
     <title>Token List</title>
     <link rel="stylesheet" href="/static/css/styles.css">
     <style>
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 40px;
+        }
+
+        .sort-controls {
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sort-controls label {
+            color: #00ff88;
+            font-weight: bold;
+        }
+
+        .sort-controls select {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ff88;
+            border-radius: 5px;
+            color: #00ff88;
+            padding: 8px 12px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+
+        .sort-controls select:hover {
+            background: rgba(0, 255, 136, 0.1);
+        }
+
+        .sort-controls select:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.3);
+        }
+
         .token-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-template-columns: 1fr;
             gap: 20px;
-            padding: 20px;
+            padding: 40px 0;
+        }
+
+        @media (min-width: 768px) {
+            .token-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .token-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (min-width: 1280px) {
+            .token-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
         }
 
         .token-card {
@@ -55,7 +110,13 @@
         .token-details {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 12px;
+        }
+
+        .token-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .token-symbol {
@@ -66,16 +127,43 @@
         .token-address {
             font-family: monospace;
             font-size: 0.85em;
-            word-break: break-all;
+            color: rgba(255, 255, 255, 0.7);
             background: rgba(0, 0, 0, 0.3);
-            padding: 8px;
+            padding: 4px 8px;
             border-radius: 4px;
         }
 
-        .token-date {
+        .token-dates {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
             font-size: 0.85em;
             color: rgba(0, 255, 136, 0.7);
             margin-top: auto;
+        }
+
+        .token-metrics {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .token-market-cap, .token-koi-events {
+            font-size: 0.9em;
+            color: rgba(0, 255, 136, 0.9);
+            font-weight: bold;
+        }
+
+        .metric-label {
+            color: rgba(255, 255, 255, 0.5);
+            margin-right: 4px;
+        }
+
+        .date-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.9em;
+            margin-right: 4px;
         }
 
         .loading {
@@ -100,10 +188,7 @@
             color: inherit;
             text-decoration: none;
             transition: all 0.2s ease;
-        }
-
-        .token-link {
-            display: block;  /* Make the link fill the card space */
+            display: block;
         }
 
         .token-link:hover .token-card {
@@ -116,6 +201,14 @@
 <body>
     <div class="container">
         <h1>🚀 Token List 💎</h1>
+        <div class="sort-controls">
+            <label for="sort-select">Sort by:</label>
+            <select id="sort-select" onchange="handleSort(this.value)">
+                <option value="recent_opportunity">Last Update</option>
+                <option value="market_cap">Market Cap</option>
+                <option value="koi_events">KOI Events</option>
+            </select>
+        </div>
         <div class="token-grid">
             <!-- Tokens will be dynamically inserted here -->
             <div class="loading">Loading tokens...</div>
@@ -123,14 +216,77 @@
     </div>
 
     <script>
+        let tokensData = [];
+
+        function calculateKoiEvents(token) {
+            if (!token.token_reports) return 0;
+            
+            return token.token_reports.reduce((total, report) => {
+                if (!report.social_media_post) return total;
+                const post = report.social_media_post;
+                return total + 1 + // Count the post itself
+                    (post.reactions_count || 0) +
+                    (post.replies_count || 0) +
+                    (post.reposts_count || 0);
+            }, 0);
+        }
+
+        function getLatestOpportunity(token) {
+            if (!token.token_opportunities || token.token_opportunities.length === 0) {
+                return null;
+            }
+            return token.token_opportunities.reduce((latest, current) => {
+                const latestDate = new Date(latest.created_at);
+                const currentDate = new Date(current.created_at);
+                return currentDate > latestDate ? current : latest;
+            });
+        }
+
+        function handleSort(sortBy) {
+            if (!tokensData.length) return;
+
+            const sortedTokens = [...tokensData];
+            
+            if (sortBy === 'recent_opportunity') {
+                sortedTokens.sort((a, b) => {
+                    const aOpp = getLatestOpportunity(a);
+                    const bOpp = getLatestOpportunity(b);
+                    
+                    if (!aOpp && !bOpp) return 0;
+                    if (!aOpp) return 1;
+                    if (!bOpp) return -1;
+                    
+                    return new Date(bOpp.created_at) - new Date(aOpp.created_at);
+                });
+            } else if (sortBy === 'market_cap') {
+                sortedTokens.sort((a, b) => {
+                    const aOpp = getLatestOpportunity(a);
+                    const bOpp = getLatestOpportunity(b);
+                    
+                    const aMarketCap = aOpp?.market_cap || 0;
+                    const bMarketCap = bOpp?.market_cap || 0;
+                    
+                    return bMarketCap - aMarketCap;
+                });
+            } else if (sortBy === 'koi_events') {
+                sortedTokens.sort((a, b) => {
+                    const aEvents = calculateKoiEvents(a);
+                    const bEvents = calculateKoiEvents(b);
+                    return bEvents - aEvents;
+                });
+            }
+
+            displayTokens(sortedTokens);
+        }
+
         async function fetchTokens() {
             try {
                 const response = await fetch('/api/tokens');
                 if (!response.ok) {
                     throw new Error('Failed to fetch tokens');
                 }
-                const tokens = await response.json();
-                displayTokens(tokens);
+                tokensData = await response.json();
+                handleSort('recent_opportunity');
             } catch (error) {
                 console.error('Error:', error);
                 document.querySelector('.token-grid').innerHTML = `
@@ -165,15 +321,59 @@
                             </div>
                         </div>
                         <div class="token-details">
-                            <div class="token-symbol">${escapeHtml(token.symbol)}</div>
-                            <div class="token-address">${escapeHtml(token.address)}</div>
-                        </div>
-                        <div class="token-date">
-                            ${new Date(token.created_at).toLocaleDateString()}
+                            <div class="token-row">
+                                <div class="token-symbol">${escapeHtml(token.symbol)}</div>
+                                <div class="token-address">${truncateAddress(token.address)}</div>
+                            </div>
+                            ${renderOpportunityDetails(token)}
                         </div>
                     </div>
                 </a>
             `).join('');
+        }
+
+        function truncateAddress(address) {
+            if (!address) return '';
+            if (address.length <= 8) return address;
+            return `${address.slice(0, 4)}...${address.slice(-4)}`;
+        }
+
+        function formatMarketCap(marketCap) {
+            if (!marketCap) return 'N/A';
+            if (marketCap >= 1e9) {
+                return `$${(marketCap / 1e9).toFixed(2)}B`;
+            }
+            if (marketCap >= 1e6) {
+                return `$${(marketCap / 1e6).toFixed(2)}M`;
+            }
+            return `$${marketCap.toLocaleString()}`;
+        }
+
+        function renderOpportunityDetails(token) {
+            const latestOpp = getLatestOpportunity(token);
+            const koiEvents = calculateKoiEvents(token);
+
+            if (!latestOpp) {
+                return `
+                    <div class="token-dates">
+                        <div><span class="date-label">Created:</span>${new Date(token.created_at).toLocaleDateString()}</div>
+                    </div>
+                    <div class="token-metrics">
+                        <div class="token-koi-events"><span class="metric-label">KOI Events:</span>${koiEvents.toLocaleString()}</div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="token-dates">
+                    <div><span class="date-label">Created:</span>${new Date(token.created_at).toLocaleDateString()}</div>
+                    <div><span class="date-label">Last Update:</span>${new Date(latestOpp.created_at).toLocaleDateString()}</div>
+                </div>
+                <div class="token-metrics">
+                    <div class="token-market-cap"><span class="metric-label">Market Cap:</span>${formatMarketCap(latestOpp.market_cap)}</div>
+                    <div class="token-koi-events"><span class="metric-label">KOI Events:</span>${koiEvents.toLocaleString()}</div>
+                </div>
+            `;
         }
 
         function escapeHtml(unsafe) {
