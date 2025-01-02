@@ -3,17 +3,10 @@ import os
 import sys
 import argparse
 
-# Process environment arguments first
+# Process arguments
 parser = argparse.ArgumentParser(description='Scout Warpcasts for opportunities')
 parser.add_argument('--test', action='store_true', help='Run in test mode (process only 3 casts total)')
-parser.add_argument('--prod', action='store_true', help='Run against production database tables (prod_ prefix)')
 args = parser.parse_args()
-
-# Set environment before importing any database models
-if args.prod:
-    os.environ["REPLIT_DEPLOYMENT"] = "1"
-else:
-    os.environ["REPLIT_DEPLOYMENT"] = "0"
 
 import asyncio
 import aiohttp
@@ -35,9 +28,6 @@ logging.basicConfig(
     ]
 )
 
-# Log environment
-env = "prod" if args.prod else "dev"
-logging.info(f"Running in {env} environment")
 
 PRIMARY_USER = 'drypowder'
 PRIMARY_USER_FID = 887822
@@ -228,8 +218,6 @@ async def scout_warpcasts(test_mode: bool = False):
     total_processed = [0]
     total_opportunities = [0]
     
-    env = "dev" if not os.environ.get("REPLIT_DEPLOYMENT") else "prod"
-    logging.info(f"Running in {env} environment")
     logging.info(f"Target number of casts to process: {total_casts_target}")
     
     async with aiohttp.ClientSession() as session:
