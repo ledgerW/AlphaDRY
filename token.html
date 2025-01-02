@@ -47,12 +47,29 @@
             padding: 15px;
             animation: glow 2s infinite alternate;
             position: relative;
+            width: 100%;
+            box-sizing: border-box;
+            margin: 0 auto;
         }
 
         .social-post {
             display: flex;
             flex-direction: column;
             gap: 10px;
+            max-width: 100%;
+            overflow-wrap: break-word;
+        }
+
+        @media (max-width: 576px) {
+            .token-grid {
+                padding: 10px;
+            }
+            
+            .token-opportunity, .social-post {
+                padding: 12px;
+                margin: 0;
+                width: 100%;
+            }
         }
 
         .social-post-header {
