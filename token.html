@@ -408,14 +408,16 @@
 
                 // Clear loading message and create content sections
                 tokenGrid.innerHTML = `
-                    <div style="padding: 0 20px; margin-bottom: 30px; position: relative;">
-                        <div class="button-container" style="position: absolute; left: 0; top: 50%; transform: translateY(-50%);">
-                            <button id="runAlphaScout" class="action-button">
-                                🚀 🔬 Run Alpha Analysis
-                            </button>
-                            <div id="timeMessage"></div>
+                    <div style="padding: 0 20px; margin-bottom: 30px;">
+                        <div style="display: flex; flex-direction: column; gap: 15px; align-items: center;">
+                            <h2 class="section-header" style="margin: 0;">Token Analysis</h2>
+                            <div class="button-container">
+                                <button id="runAlphaScout" class="action-button">
+                                    🚀 🔬 Run Alpha Analysis
+                                </button>
+                                <div id="timeMessage"></div>
+                            </div>
                         </div>
-                        <h2 class="section-header" style="margin: 0; text-align: center;">Token Analysis</h2>
                     </div>
                     ${opportunities.length > 0 
                         ? createOpportunityHTML(opportunities[0])
