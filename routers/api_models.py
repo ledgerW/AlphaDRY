@@ -57,3 +57,6 @@ class SocialMediaInput(BaseModel):
     author_display_name: str = Field(default=None, description="Author's display name")
     post_id: str = Field(default=None, description="Original post ID from the source")
     original_timestamp: datetime = Field(default=None, description="Original post date/time from the source platform")
+    reactions_count: int = Field(default=0, description="Number of reactions to the post")
+    replies_count: int = Field(default=0, description="Number of replies to the post")
+    reposts_count: int = Field(default=0, description="Number of reposts of the post")
