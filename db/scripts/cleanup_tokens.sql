@@ -1,7 +1,5 @@
 
--- First, convert all chain values to lowercase
-UPDATE prod_tokens
-SET chain = LOWER(chain);
+BEGIN;
 
 -- Create temp table to track which tokens will be deleted and their replacements
 CREATE TEMP TABLE token_mapping (
@@ -9,10 +7,13 @@ CREATE TEMP TABLE token_mapping (
     new_token_id INT
 );
 
--- Identify duplicates and decide which ones to keep (most recently created)
+-- Identify duplicates and map them to the most recently created token
 WITH duplicates AS (
     SELECT DISTINCT ON (LOWER(chain), LOWER(address))
            id as keep_id,
+           chain,
+           address,
+           created_at,
            ARRAY(
                SELECT t2.id 
                FROM prod_tokens t2 
@@ -29,13 +30,12 @@ SELECT unnest(ids_to_remove), keep_id
 FROM duplicates
 WHERE array_length(ids_to_remove, 1) > 0;
 
--- Update token reports to point to the surviving tokens
+-- Update relationships before deleting tokens
 UPDATE prod_token_reports
 SET token_id = tm.new_token_id
 FROM token_mapping tm
 WHERE token_id = tm.old_token_id;
 
--- Update token opportunities to point to the surviving tokens
 UPDATE prod_token_opportunities
 SET token_id = tm.new_token_id
 FROM token_mapping tm
@@ -46,7 +46,10 @@ DELETE FROM prod_tokens t
 USING token_mapping tm
 WHERE t.id = tm.old_token_id;
 
--- Drop the temporary table
+-- Now safely convert remaining chain values to lowercase
+UPDATE prod_tokens
+SET chain = LOWER(chain);
+
 DROP TABLE token_mapping;
 
 -- Verify results
@@ -55,3 +58,5 @@ FROM prod_tokens
 WHERE address IS NOT NULL
 GROUP BY chain, LOWER(address)
 HAVING COUNT(*) > 1;
+
+COMMIT;
