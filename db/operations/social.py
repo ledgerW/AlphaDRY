@@ -61,6 +61,7 @@ def create_token_report(report_data: Dict[str, Any], post_id: Optional[int] = No
     try:
         # Try to find or create token if this is a purchasable token
         token = None
+        chain = None
         if report_data.get('mentions_purchasable_token') and report_data.get('token_chain'):
             chain = report_data['token_chain'].lower()
             
@@ -98,7 +99,7 @@ def create_token_report(report_data: Dict[str, Any], post_id: Optional[int] = No
         report = TokenReportDB(
             mentions_purchasable_token=report_data.get('mentions_purchasable_token', False),
             token_symbol=report_data.get('token_symbol'),
-            token_chain=report_data.get('token_chain', '').lower(),
+            token_chain=None if not chain else chain,
             token_address=report_data.get('token_address'),
             is_listed_on_dex=report_data.get('is_listed_on_dex'),
             trading_pairs=report_data.get('trading_pairs', []),
