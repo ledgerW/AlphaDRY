@@ -98,7 +98,7 @@ def get_token_data(
     return token_data.dict()
 
 # Define supported chains
-SUPPORTED_CHAINS = Literal["ethereum", "polygon", "arbitrum", "optimism", "base", "solana"]
+SUPPORTED_CHAINS = Literal["ethereum", "polygon", "arbitrum", "optimism", "base", "solana", "other"]
 class IsTokenReport(BaseModel):
     """Use this tool to record the results of your research into whether the text mentions a token that can be purchased."""
     mentions_purchasable_token: bool = Field(description="Whether the text mentions a token that can be purchased")
