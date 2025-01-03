@@ -1,5 +1,5 @@
 from langchain_core.tools import tool
-from typing import List, Dict, Optional, Union, Annotated
+from typing import List, Dict, Optional, Union, Annotated, Literal
 from pydantic import BaseModel, Field
 import requests
 
