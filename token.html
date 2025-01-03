@@ -502,8 +502,10 @@
                     }
                     const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
                     const lastAnalysisDate = new Date(lastAnalysisTime);
-                    const timeSinceLastAnalysis = Date.now() - lastAnalysisDate;
-                    console.log('Last analysis:', lastAnalysisDate.toISOString());
+                    const currentUTC = new Date();
+                    const timeSinceLastAnalysis = currentUTC.getTime() - lastAnalysisDate.getTime();
+                    console.log('Last analysis UTC:', lastAnalysisDate.toISOString());
+                    console.log('Current time UTC:', currentUTC.toISOString());
                     console.log('Time since analysis (ms):', timeSinceLastAnalysis);
                     return timeSinceLastAnalysis >= oneHour;
                 }
@@ -515,8 +517,8 @@
                     
                     if (!canRunAnalysis(lastAnalysisTime)) {
                         const lastAnalysisDate = new Date(lastAnalysisTime);
-                        const now = Date.now();
-                        const elapsedMs = now - lastAnalysisDate;
+                        const currentUTC = new Date();
+                        const elapsedMs = currentUTC.getTime() - lastAnalysisDate.getTime();
                         const minutesElapsed = Math.floor(elapsedMs / (60 * 1000));
                         const minutesLeft = 60 - minutesElapsed;
                         const adjustedMinutes = Math.max(0, Math.min(60, minutesLeft));
