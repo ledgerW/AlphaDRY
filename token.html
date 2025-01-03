@@ -496,9 +496,15 @@
 
                 // Check if an hour has passed since last analysis
                 function canRunAnalysis(lastAnalysisTime) {
-                    if (!lastAnalysisTime) return true;
+                    if (!lastAnalysisTime) {
+                        console.log('No previous analysis time found');
+                        return true;
+                    }
                     const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
-                    const timeSinceLastAnalysis = Date.now() - new Date(lastAnalysisTime).getTime();
+                    const lastAnalysisDate = new Date(lastAnalysisTime);
+                    const timeSinceLastAnalysis = Date.now() - lastAnalysisDate.getTime();
+                    console.log('Last analysis:', lastAnalysisDate.toISOString());
+                    console.log('Time since last analysis:', Math.floor(timeSinceLastAnalysis / 1000 / 60), 'minutes');
                     return timeSinceLastAnalysis >= oneHour;
                 }
 
@@ -512,9 +518,11 @@
                         const timeSinceAnalysis = Date.now() - lastAnalysisDate.getTime();
                         const minutesLeft = Math.ceil((60 * 60 * 1000 - timeSinceAnalysis) / (60 * 1000));
                         
+                        console.log('Button disabled - minutes remaining:', minutesLeft);
                         button.disabled = true;
-                        messageEl.textContent = `Available in ${minutesLeft % 60} minute${minutesLeft % 60 !== 1 ? 's' : ''}`;
+                        messageEl.textContent = `Available in ${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''}`;
                     } else {
+                        console.log('Button enabled - analysis can be run');
                         button.disabled = false;
                         messageEl.textContent = '';
                     }
