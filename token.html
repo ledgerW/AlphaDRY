@@ -503,8 +503,9 @@
                     const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
                     const lastAnalysisDate = new Date(lastAnalysisTime);
                     const timeSinceLastAnalysis = Date.now() - lastAnalysisDate.getTime();
+                    const minutesElapsed = Math.floor(timeSinceLastAnalysis / (60 * 1000));
                     console.log('Last analysis:', lastAnalysisDate.toISOString());
-                    console.log('Time since last analysis:', Math.floor(timeSinceLastAnalysis / 1000 / 60), 'minutes');
+                    console.log('Minutes since last analysis:', minutesElapsed);
                     return timeSinceLastAnalysis >= oneHour;
                 }
 
@@ -516,8 +517,9 @@
                     if (!canRunAnalysis(lastAnalysisTime)) {
                         const lastAnalysisDate = new Date(lastAnalysisTime);
                         const timeSinceAnalysis = Date.now() - lastAnalysisDate.getTime();
-                        const minutesLeft = Math.ceil((60 * 60 * 1000 - timeSinceAnalysis) / (60 * 1000));
-                        const adjustedMinutes = Math.min(60, Math.max(0, minutesLeft));
+                        const minutesElapsed = Math.floor(timeSinceAnalysis / (60 * 1000));
+                        const minutesLeft = 60 - minutesElapsed;
+                        const adjustedMinutes = Math.max(0, minutesLeft);
                         
                         console.log('Button disabled - minutes remaining:', adjustedMinutes);
                         button.disabled = true;
