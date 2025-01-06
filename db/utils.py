@@ -26,17 +26,17 @@ def populate_dev_data():
             session.add(report)
             session.flush()
             
-            # Create SNEGEN token with DEX screener data
+            # Create SNEGEN token with DEX screener data (on Solana)
             snegen_token = session.query(TokenDB).filter(
-                TokenDB.chain == Chain.BASE,
-                TokenDB.address == "0x1234567890abcdef"
+                TokenDB.chain == Chain.SOLANA,
+                TokenDB.address == "SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj"
             ).first()
             if not snegen_token:
                 snegen_token = TokenDB(
                     symbol="SNEGEN",
                     name="SNEGEN Token",
-                    chain=Chain.BASE,
-                    address="0x1234567890abcdef",
+                    chain=Chain.SOLANA,
+                    address="SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj",
                     website_url="https://snegen.com",
                     twitter_url="https://twitter.com/snegen",
                     telegram_url="https://t.me/snegen",
