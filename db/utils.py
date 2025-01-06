@@ -340,6 +340,21 @@ def populate_dev_data():
             )
             session.add(additional_opportunity)
             
+            # Create HIGHER token
+            higher_token = session.query(TokenDB).filter(
+                TokenDB.chain == Chain.BASE,
+                TokenDB.address == "0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe"
+            ).first()
+            if not higher_token:
+                higher_token = TokenDB(
+                    symbol="HIGHER",
+                    name="HIGHER Token",
+                    chain=Chain.BASE,
+                    address="0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe",
+                    created_at=datetime.utcnow()
+                )
+                session.add(higher_token)
+            
             session.commit()
         except Exception as e:
             session.rollback()
