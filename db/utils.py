@@ -345,10 +345,10 @@ def populate_dev_data():
                 symbol="HIGHER",
                 name="HIGHER Token",
                 chain=Chain.BASE,
-                address="0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe",
-                created_at=datetime.utcnow()
+                address="0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe"
             )
             session.add(higher_token)
+            session.flush()
             
             session.commit()
         except Exception as e:
