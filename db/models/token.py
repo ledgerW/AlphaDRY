@@ -14,6 +14,15 @@ class TokenDB(SQLModel, table=True):
     address: Optional[str] = Field(index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
+    # Social URLs
+    image_url: Optional[str] = None
+    website_url: Optional[str] = None
+    warpcast_url: Optional[str] = None
+    twitter_url: Optional[str] = None
+    telegram_url: Optional[str] = None
+    signal_url: Optional[str] = None
+    token_created_at: Optional[datetime] = None
+    
     # Relationships
     token_reports: List["TokenReportDB"] = Relationship(back_populates="token")
     token_opportunities: List["TokenOpportunityDB"] = Relationship(back_populates="token")

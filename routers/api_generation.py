@@ -18,6 +18,7 @@ from database import (
     create_social_media_post, create_token_report
 )
 from db.operations.alpha import has_recent_token_report
+from db.operations.social import fetch_dex_screener_data
 from .api_models import Token, SocialMediaInput
 from schemas import SocialMediaSummary
 from db.models.token import TokenDB
@@ -289,6 +290,12 @@ async def analyze_social_post(input_data: SocialMediaInput, existing_session=Non
                 detail="Failed to analyze text with token finder agent"
             )
 
+        # If we have a token address, fetch additional data from DEX Screener
+        if token_report.get('token_address'):
+            dex_data = await fetch_dex_screener_data(token_report['token_address'])
+            if dex_data:
+                token_report.update(dex_data)
+        
         # Save token report to database and get the saved object
         db_token_report = create_token_report(token_report, social_post.id, existing_session=existing_session)
         if not db_token_report:

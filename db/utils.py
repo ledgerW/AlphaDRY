@@ -6,7 +6,6 @@ from .connection import get_engine, get_env_prefix, tables_exist
 from .models.alpha import AlphaReportDB, TokenOpportunityDB
 from .models.token import TokenDB
 from .models.social import SocialMediaPostDB, TokenReportDB
-from .models.warpcast import get_model
 from .models.base import get_session
 from agents.models import Chain
 
@@ -27,22 +26,33 @@ def populate_dev_data():
             session.add(report)
             session.flush()
 
-            # Create sample tokens first
-            token_1 = TokenDB(
-                symbol="BASE1",
-                name="Base Token 1",
-                chain=Chain.BASE,
-                address="0x1234567890abcdef"
-            )
-            session.add(token_1)
+            # Create or get sample tokens
+            token_1 = session.query(TokenDB).filter(
+                TokenDB.chain == Chain.BASE,
+                TokenDB.address == "0x1234567890abcdef"
+            ).first()
+            if not token_1:
+                token_1 = TokenDB(
+                    symbol="BASE1",
+                    name="Base Token 1",
+                    chain=Chain.BASE,
+                    address="0x1234567890abcdef"
+                )
+                session.add(token_1)
 
-            token_2 = TokenDB(
-                symbol="SOL1",
-                name="Solana Token 1",
-                chain=Chain.SOLANA,
-                address="SOL123456789"
-            )
-            session.add(token_2)
+            token_2 = session.query(TokenDB).filter(
+                TokenDB.chain == Chain.SOLANA,
+                TokenDB.address == "SOL123456789"
+            ).first()
+            if not token_2:
+                token_2 = TokenDB(
+                    symbol="SOL1",
+                    name="Solana Token 1",
+                    chain=Chain.SOLANA,
+                    address="SOL123456789"
+                )
+                session.add(token_2)
+            
             session.flush()  # Get IDs for the tokens
 
             # Create sample token reports
@@ -147,40 +157,23 @@ def populate_dev_data():
             session.rollback()
             print(f"Error creating alpha reports: {e}")
 
-    # Create warpcast data in a separate transaction
-    with get_session() as session:
-        try:
-            Model = get_model()
-            warpcast = Model(
-                raw_cast={"sample": "data"},
-                hash="sample_hash_123",
-                username="test_user",
-                user_fid=12345,
-                text="This is a sample warpcast message",
-                timestamp=datetime.utcnow(),
-                replies=5,
-                reactions=10,
-                recasts=3,
-                pulled_from_user="sample_puller"
-            )
-            session.add(warpcast)
-            session.commit()
-        except Exception as e:
-            session.rollback()
-            print(f"Error creating warpcast: {e}")
-
     # Create sample social media posts and token reports
     with get_session() as session:
         try:
-            # Create sample token
-            sample_token = TokenDB(
-                symbol="SAMPLE",
-                name="Sample Token",
-                chain=Chain.ETHEREUM,
-                address="0xsample"
-            )
-            session.add(sample_token)
-            session.flush()
+            # Create or get sample token
+            sample_token = session.query(TokenDB).filter(
+                TokenDB.chain == Chain.ETHEREUM,
+                TokenDB.address == "0xsample"
+            ).first()
+            if not sample_token:
+                sample_token = TokenDB(
+                    symbol="SAMPLE",
+                    name="Sample Token",
+                    chain=Chain.ETHEREUM,
+                    address="0xsample"
+                )
+                session.add(sample_token)
+                session.flush()
 
             # Create sample token report
             sample_token_report = TokenReportDB(
@@ -215,15 +208,20 @@ def populate_dev_data():
             )
             session.add(sample_social_post)
 
-            # Create SNEGEN token
-            snegen_token = TokenDB(
-                symbol="SNEGEN",
-                name="SNEGEN",
-                chain=Chain.SOLANA,
-                address="SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj"
-            )
-            session.add(snegen_token)
-            session.flush()
+            # Create or get SNEGEN token
+            snegen_token = session.query(TokenDB).filter(
+                TokenDB.chain == Chain.SOLANA,
+                TokenDB.address == "SNGNZYxdKvH4ZuVGZTtBVHDhXtQJeqoJKBqEYj"
+            ).first()
+            if not snegen_token:
+                snegen_token = TokenDB(
+                    symbol="SNEGEN",
+                    name="SNEGEN",
+                    chain=Chain.SOLANA,
+                    address="SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj"
+                )
+                session.add(snegen_token)
+                session.flush()
 
             # Create SNEGEN token report
             snegen_token_report = TokenReportDB(
@@ -347,23 +345,67 @@ def reset_db():
     engine = get_engine()
     env_prefix = get_env_prefix()
     
-    # Drop tables in correct order to handle dependencies
-    with engine.begin() as conn:
-        # Drop tables first
-        conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}token_opportunities CASCADE"))
-        conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}alpha_reports CASCADE"))
-        conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}warpcasts CASCADE"))
-        conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}social_media_posts CASCADE"))
-        conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}token_reports CASCADE"))
-        conn.execute(text(f"DROP TABLE IF EXISTS {env_prefix}tokens CASCADE"))
-        
-        # Only drop the enum type if we're in dev environment
-        if env_prefix == "dev_":
-            conn.execute(text("DROP TYPE IF EXISTS chain CASCADE"))
+    print(f"Current environment prefix: {env_prefix}")
     
-    # Recreate tables
-    SQLModel.metadata.create_all(engine)
-    populate_dev_data()
+    if env_prefix != "dev_":
+        raise ValueError("reset_db() can only be used in development environment")
+    
+    try:
+        if "prod_" in str(engine.url):
+            raise ValueError("CRITICAL SAFETY ERROR: Attempting to reset database with production connection string")
+            
+        print("Starting database reset...")
+        # Drop tables in correct order to handle dependencies
+        with engine.begin() as conn:
+            print("Checking for active connections...")
+            # Only terminate connections to dev tables
+            result = conn.execute(text("""
+                SELECT pg_terminate_backend(pid) 
+                FROM pg_stat_activity 
+                WHERE datname = current_database()
+                AND pid != pg_backend_pid()
+                AND state != 'idle'
+                AND application_name = 'dev'
+            """))
+            print(f"Terminated {result.rowcount} development connections")
+            
+            # Get all dev tables
+            result = conn.execute(text("""
+                SELECT tablename 
+                FROM pg_tables 
+                WHERE schemaname = 'public'
+                AND tablename LIKE 'dev_%'
+            """))
+            dev_tables = [row[0] for row in result.fetchall()]
+            print(f"Found dev tables: {dev_tables}")
+            
+            # Drop dev tables in correct order
+            tables_to_drop = [
+                "dev_token_opportunities",
+                "dev_alpha_reports",
+                "dev_social_media_posts",
+                "dev_token_reports",
+                "dev_tokens"
+            ]
+            
+            for table in tables_to_drop:
+                if table in dev_tables:
+                    print(f"Dropping table {table}")
+                    conn.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
+            
+            print("Dropping enum type...")
+            # Drop the enum type
+            conn.execute(text("DROP TYPE IF EXISTS chain CASCADE"))
+        
+        print("Recreating tables...")
+        # Recreate tables
+        SQLModel.metadata.create_all(engine)
+        print("Populating development data...")
+        populate_dev_data()
+        print("Database reset complete")
+    except Exception as e:
+        print(f"Error resetting database: {e}")
+        raise
 
 def create_db_and_tables(force_reset: bool = False):
     """Create database tables if they don't exist and populate dev data."""

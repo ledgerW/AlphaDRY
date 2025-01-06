@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 # Import all models to ensure they are registered with SQLModel metadata
 from db.models.alpha import *
 from db.models.social import *
-from db.models.warpcast import *
 from db.connection import get_env_prefix
 
 # Load environment variables
