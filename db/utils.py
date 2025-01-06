@@ -345,10 +345,22 @@ def populate_dev_data():
                 symbol="HIGHER",
                 name="HIGHER Token",
                 chain=Chain.BASE,
-                address="0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe"
+                address="0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe",
+                created_at=datetime.utcnow()
             )
             session.add(higher_token)
-            session.flush()
+            
+            # Update SNEGEN token with DEX screener data
+            snegen_token = session.query(TokenDB).filter(
+                TokenDB.chain == Chain.SOLANA,
+                TokenDB.address == "SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj"
+            ).first()
+            if snegen_token:
+                # Update SNEGEN token with additional data
+                snegen_token.market_cap = 750000.0  # Example value
+                snegen_token.website_url = "https://snegen.xyz"
+                snegen_token.twitter_url = "https://twitter.com/snegen_xyz"
+                snegen_token.telegram_url = "https://t.me/snegen_community"
             
             session.commit()
         except Exception as e:
