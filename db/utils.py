@@ -37,10 +37,10 @@ def populate_dev_data():
                     name="SNEGEN Token",
                     chain=Chain.SOLANA,
                     address="SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj",
-                    website_url="https://snegen.com",
-                    twitter_url="https://twitter.com/snegen",
-                    telegram_url="https://t.me/snegen",
-                    image_url="https://assets.dexscreener.com/snegen/logo.png",
+                    website_url="https://snegen.xyz",
+                    twitter_url="https://twitter.com/snegen_xyz",
+                    telegram_url="https://t.me/snegen_community",
+                    image_url="https://raw.githubusercontent.com/snegen/brand/main/logo.png",
                     token_created_at=datetime.utcnow() - timedelta(days=30)  # Created 30 days ago
                 )
                 session.add(snegen_token)
