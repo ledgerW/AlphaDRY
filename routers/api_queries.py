@@ -107,7 +107,13 @@ async def get_alpha_reports(date: Optional[str] = None):
                                 symbol=opp.token.symbol,
                                 name=opp.token.name,
                                 chain=str(opp.token.chain),
-                                address=opp.token.address
+                                address=opp.token.address,
+                                image_url=opp.token.image_url,
+                                website_url=opp.token.website_url,
+                                warpcast_url=opp.token.warpcast_url,
+                                twitter_url=opp.token.twitter_url,
+                                telegram_url=opp.token.telegram_url,
+                                signal_url=opp.token.signal_url
                             ) if opp.token else None,
                             token_report={
                                 "social_media_post": {
@@ -185,6 +191,12 @@ async def get_token(address: str):
                 "chain": str(token.chain),
                 "address": token.address,
                 "created_at": token.created_at.isoformat(),
+                "image_url": token.image_url,
+                "website_url": token.website_url,
+                "warpcast_url": token.warpcast_url,
+                "twitter_url": token.twitter_url,
+                "telegram_url": token.telegram_url,
+                "signal_url": token.signal_url,
                 "token_reports": [
                     {
                         "id": report.id,
@@ -263,6 +275,12 @@ async def get_tokens():
                     "chain": str(token.chain),
                     "address": token.address,
                     "created_at": token.created_at.isoformat(),
+                    "image_url": token.image_url,
+                    "website_url": token.website_url,
+                    "warpcast_url": token.warpcast_url,
+                    "twitter_url": token.twitter_url,
+                    "telegram_url": token.telegram_url,
+                    "signal_url": token.signal_url,
                     "token_reports": [
                         {
                             "id": report.id,

@@ -60,70 +60,8 @@ def populate_dev_data():
             
             session.flush()  # Get IDs for the tokens
 
-            # Create sample token reports
-            token_report_1 = TokenReportDB(
-                mentions_purchasable_token=True,
-                token_symbol="BASE1",
-                token_chain="base",
-                token_address="0x1234567890abcdef",
-                is_listed_on_dex=True,
-                trading_pairs=["BASE1/ETH", "BASE1/USDC"],
-                confidence_score=8,
-                reasoning="Sample Base token analysis",
-                token_id=token_1.id
-            )
-            session.add(token_report_1)
 
-            token_report_2 = TokenReportDB(
-                mentions_purchasable_token=True,
-                token_symbol="SOL1",
-                token_chain="solana",
-                token_address="SOL123456789",
-                is_listed_on_dex=True,
-                trading_pairs=["SOL1/SOL", "SOL1/USDC"],
-                confidence_score=7,
-                reasoning="Sample Solana token analysis",
-                token_id=token_2.id
-            )
-            session.add(token_report_2)
-            session.flush()  # Flush to get IDs
-
-            # Create social media posts for each token report
-            social_post_1 = SocialMediaPostDB(
-                source="warpcast",
-                post_id="base123",
-                author_id="user456",
-                author_username="base_enthusiast",
-                author_display_name="Base Enthusiast",
-                text="Check out this new Base token $BASE1 0x1234567890abcdef",
-                original_timestamp=datetime.utcnow(),
-                timestamp=datetime.utcnow(),
-                reactions_count=15,
-                replies_count=5,
-                reposts_count=3,
-                raw_data={"platform": "warpcast"},
-                token_report_id=token_report_1.id
-            )
-            session.add(social_post_1)
-
-            social_post_2 = SocialMediaPostDB(
-                source="warpcast",
-                post_id="sol123",
-                author_id="user789",
-                author_username="sol_enthusiast",
-                author_display_name="Solana Enthusiast",
-                text="New Solana gem $SOL1 SOL123456789",
-                original_timestamp=datetime.utcnow(),
-                timestamp=datetime.utcnow(),
-                reactions_count=20,
-                replies_count=8,
-                reposts_count=5,
-                raw_data={"platform": "warpcast"},
-                token_report_id=token_report_2.id
-            )
-            session.add(social_post_2)
-
-            # Create HIGHER token
+            # Create HIGHER token with DEX screener data
             higher_token = TokenDB(
                 symbol="HIGHER",
                 name="HIGHER Token",
@@ -134,51 +72,15 @@ def populate_dev_data():
             session.add(higher_token)
             session.flush()
 
-            # Create HIGHER token
-            higher_token = TokenDB(
-                symbol="HIGHER",
-                name="HIGHER Token",
-                chain=Chain.BASE,
-                address="0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe",
-                created_at=datetime.utcnow()
-            )
-            session.add(higher_token)
-            session.flush()
+            # Fetch and update DEX screener data for HIGHER token
+            import asyncio
+            from .operations.social import fetch_dex_screener_data
+            dex_data = asyncio.run(fetch_dex_screener_data("0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe"))
+            if dex_data:
+                for key, value in dex_data.items():
+                    setattr(higher_token, key, value)
+                session.flush()
 
-            # Create sample token opportunities with both relationships
-            opportunities = [
-                TokenOpportunityDB(
-                    name="Sample Token 1",
-                    chain=Chain.BASE,
-                    contract_address="0x1234567890abcdef",
-                    market_cap=1000000.0,
-                    community_score=8,
-                    safety_score=7,
-                    justification="Strong community and solid fundamentals",
-                    sources=["source1.com", "source2.com"],
-                    recommendation="Buy",
-                    report_id=report.id,
-                    token_report_id=token_report_1.id,  # Link to token report
-                    token_id=token_1.id  # Link to token
-                ),
-                TokenOpportunityDB(
-                    name="Sample Token 2",
-                    chain=Chain.SOLANA,
-                    contract_address="SOL123456789",
-                    market_cap=500000.0,
-                    community_score=6,
-                    safety_score=8,
-                    justification="Innovative technology with growing adoption",
-                    sources=["source3.com", "source4.com"],
-                    recommendation="Hold",
-                    report_id=report.id,
-                    token_report_id=token_report_2.id,  # Link to token report
-                    token_id=token_2.id  # Link to token
-                )
-            ]
-            for opp in opportunities:
-                session.add(opp)
-            
             session.commit()
         except Exception as e:
             session.rollback()
@@ -235,20 +137,14 @@ def populate_dev_data():
             )
             session.add(sample_social_post)
 
-            # Create or get SNEGEN token
+            # Get SNEGEN token
             snegen_token = session.query(TokenDB).filter(
                 TokenDB.chain == Chain.SOLANA,
-                TokenDB.address == "SNGNZYxdKvH4ZuVGZTtBVHDhXtQJeqoJKBqEYj"
+                TokenDB.address == "SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj"
             ).first()
             if not snegen_token:
-                snegen_token = TokenDB(
-                    symbol="SNEGEN",
-                    name="SNEGEN",
-                    chain=Chain.SOLANA,
-                    address="SNGNZYxdKvH4ZuVGZTtBVHDhTGEBhXtQJeqoJKBqEYj"
-                )
-                session.add(snegen_token)
-                session.flush()
+                print("Error: SNEGEN token not found")
+                return
 
             # Create SNEGEN token report
             snegen_token_report = TokenReportDB(
@@ -362,16 +258,6 @@ def populate_dev_data():
             )
             session.add(additional_opportunity)
             
-            # Create HIGHER token
-            higher_token = TokenDB(
-                symbol="HIGHER",
-                name="HIGHER Token",
-                chain=Chain.BASE,
-                address="0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe",
-                created_at=datetime.utcnow()
-            )
-            session.add(higher_token)
-            
             # Update SNEGEN token with DEX screener data
             snegen_token = session.query(TokenDB).filter(
                 TokenDB.chain == Chain.SOLANA,
@@ -379,7 +265,6 @@ def populate_dev_data():
             ).first()
             if snegen_token:
                 # Update SNEGEN token with additional data
-                snegen_token.market_cap = 750000.0  # Example value
                 snegen_token.website_url = "https://snegen.xyz"
                 snegen_token.twitter_url = "https://twitter.com/snegen_xyz"
                 snegen_token.telegram_url = "https://t.me/snegen_community"

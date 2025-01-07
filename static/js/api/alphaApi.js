@@ -109,42 +109,37 @@ export async function fetchToken(address) {
     }
     const data = await response.json();
     
-    // Ensure we have the latest token report
-    if (!data.token_reports || data.token_reports.length === 0) {
-        throw new Error('No token reports available for this address');
-    }
-    
-    // Sort reports by date and get the latest
-    data.token_reports.sort((a, b) => {
-        const dateA = new Date(b.created_at || b.timestamp || 0);
-        const dateB = new Date(a.created_at || a.timestamp || 0);
-        return dateA - dateB;
-    });
-    
-    // Get the latest report and ensure all required fields are present
-    const latestReport = data.token_reports[0];
-    if (!latestReport) {
-        throw new Error('No valid token report found');
-    }
+    // Add latest report if available
+    if (data.token_reports && data.token_reports.length > 0) {
+        // Sort reports by date and get the latest
+        data.token_reports.sort((a, b) => {
+            const dateA = new Date(b.created_at || b.timestamp || 0);
+            const dateB = new Date(a.created_at || a.timestamp || 0);
+            return dateA - dateB;
+        });
+        
+        // Get the latest report and validate required fields
+        const latestReport = data.token_reports[0];
+        if (latestReport) {
+            const requiredFields = [
+                'mentions_purchasable_token',
+                'token_symbol',
+                'token_chain',
+                'token_address',
+                'is_listed_on_dex',
+                'confidence_score',
+                'reasoning'
+            ];
 
-    // Validate required fields
-    const requiredFields = [
-        'mentions_purchasable_token',
-        'token_symbol',
-        'token_chain',
-        'token_address',
-        'is_listed_on_dex',
-        'confidence_score',
-        'reasoning'
-    ];
+            const missingFields = requiredFields.filter(field => 
+                latestReport[field] === undefined || latestReport[field] === null
+            );
 
-    for (const field of requiredFields) {
-        if (latestReport[field] === undefined || latestReport[field] === null) {
-            throw new Error(`Latest token report missing required field: ${field}`);
+            if (missingFields.length === 0) {
+                data.latest_report = latestReport;
+            }
         }
     }
-
-    data.latest_report = latestReport;
     return data;
 }
 

@@ -7,6 +7,12 @@ class TokenData(BaseModel):
     name: str
     chain: str
     address: Optional[str] = None
+    image_url: Optional[str] = None
+    website_url: Optional[str] = None
+    warpcast_url: Optional[str] = None
+    twitter_url: Optional[str] = None
+    telegram_url: Optional[str] = None
+    signal_url: Optional[str] = None
 
 class TokenOpportunity(BaseModel):
     name: str
