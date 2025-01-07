@@ -304,6 +304,14 @@ async def analyze_social_post(input_data: SocialMediaInput, existing_session=Non
                 detail="Failed to save token report to database"
             )
 
+        # If we're managing our own session, commit the transaction
+        if not existing_session:
+            session = get_session()
+            with session.begin():
+                session.merge(social_post)
+                session.merge(db_token_report)
+                session.commit()
+
         # Merge the database ID with the token report data
         token_report_with_id = {**token_report, "id": db_token_report.id}
         return token_report_with_id
