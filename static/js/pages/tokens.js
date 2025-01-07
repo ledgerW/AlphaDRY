@@ -21,13 +21,16 @@ function calculateKoiEvents(token) {
     // Count unique social media posts and their engagement
     const uniquePosts = new Map(); // Use Map to track unique posts by ID
     
-    token.token_reports.forEach(report => {
+    // Ensure we're working with an array of token_reports
+    const allReports = Array.isArray(token.token_reports) ? token.token_reports : [];
+    
+    allReports.forEach(report => {
         if (!report.social_media_post) return;
         const post = report.social_media_post;
         
-        // Only count each unique post once
-        if (!uniquePosts.has(post.id)) {
-            uniquePosts.set(post.id, {
+        // Only count each unique post once using post_id as the unique identifier
+        if (!uniquePosts.has(post.post_id)) {
+            uniquePosts.set(post.post_id, {
                 reactions: post.reactions_count || 0,
                 replies: post.replies_count || 0,
                 reposts: post.reposts_count || 0
@@ -57,7 +60,10 @@ function getLatestOpportunity(token) {
 function getLatestSocialPost(token) {
     if (!token.token_reports) return null;
     
-    const postsWithDates = token.token_reports
+    // Ensure we're working with an array of token_reports
+    const allReports = Array.isArray(token.token_reports) ? token.token_reports : [];
+    
+    const postsWithDates = allReports
         .filter(report => report.social_media_post)
         .map(report => ({
             date: new Date(report.social_media_post.timestamp),
@@ -95,11 +101,29 @@ function handleSort(sortBy) {
 function applyFiltersAndSort(sortBy = document.getElementById('sort-select').value, loadMore = false) {
     if (!tokensData.length) return;
 
-    // Create a Map to ensure unique tokens by address
+    // Create a Map to ensure unique tokens by address while merging token_reports
     const uniqueTokens = new Map();
     tokensData.forEach(token => {
         if (!uniqueTokens.has(token.address)) {
-            uniqueTokens.set(token.address, token);
+            // Initialize the token with its data
+            uniqueTokens.set(token.address, {
+                ...token,
+                token_reports: [],
+                token_opportunities: []
+            });
+        }
+        
+        // Get the existing token from the Map
+        const existingToken = uniqueTokens.get(token.address);
+        
+        // Merge token_reports if they exist
+        if (token.token_reports) {
+            existingToken.token_reports = existingToken.token_reports.concat(token.token_reports);
+        }
+        
+        // Merge token_opportunities if they exist
+        if (token.token_opportunities) {
+            existingToken.token_opportunities = existingToken.token_opportunities.concat(token.token_opportunities);
         }
     });
 
