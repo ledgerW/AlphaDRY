@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy import desc, func, and_, or_, not_, select
 
 from database import (
@@ -253,45 +253,81 @@ async def get_token(address: str):
         )
 
 @router.get("/tokens")
-async def get_tokens():
-    """Get all tokens from the database that have addresses, ordered by creation date."""
+async def get_tokens(
+    page: int = 0,
+    per_page: int = 10,
+    chains: Optional[str] = None,
+    market_cap_max: Optional[float] = None,
+    sort_by: Optional[str] = None
+):
+    """Get filtered and sorted tokens from the database."""
     try:
         with get_session() as session:
-            # Query tokens with proper case handling for addresses
-            tokens = session.query(TokenDB)\
-                .filter(TokenDB.address.isnot(None))\
-                .filter(func.lower(TokenDB.chain).in_(['base', 'solana']))\
-                .order_by(desc(TokenDB.created_at))\
+            # Base query with joins
+            query = session.query(TokenDB)\
+                .filter(TokenDB.address.isnot(None))
+
+            # Apply chain filter
+            if chains:
+                selected_chains = [c.lower() for c in chains.split(',')]
+                query = query.filter(func.lower(TokenDB.chain).in_(selected_chains))
+            else:
+                # Default to base and solana if no chains specified
+                query = query.filter(func.lower(TokenDB.chain).in_(['base', 'solana']))
+
+            # Join with opportunities for market cap filter and sorting
+            query = query.outerjoin(TokenOpportunityDB)
+
+            # Apply market cap filter if specified
+            if market_cap_max is not None:
+                query = query.filter(
+                    or_(
+                        TokenOpportunityDB.market_cap.is_(None),
+                        TokenOpportunityDB.market_cap <= market_cap_max
+                    )
+                )
+
+            # Apply sorting
+            if sort_by == 'recent_opportunity':
+                query = query.group_by(TokenDB.id)\
+                    .order_by(desc(func.max(TokenOpportunityDB.created_at)))
+            elif sort_by == 'market_cap':
+                query = query.group_by(TokenDB.id)\
+                    .order_by(desc(func.max(TokenOpportunityDB.market_cap)))
+            elif sort_by == 'kol_events':
+                query = query.outerjoin(TokenDB.token_reports)\
+                    .outerjoin(TokenReportDB.social_media_post)\
+                    .group_by(TokenDB.id)\
+                    .order_by(desc(
+                        func.count(TokenReportDB.id) +
+                        func.coalesce(func.sum(SocialMediaPostDB.reactions_count), 0) +
+                        func.coalesce(func.sum(SocialMediaPostDB.replies_count), 0) +
+                        func.coalesce(func.sum(SocialMediaPostDB.reposts_count), 0)
+                    ))
+            elif sort_by == 'recent_social':
+                query = query.outerjoin(TokenDB.token_reports)\
+                    .outerjoin(TokenReportDB.social_media_post)\
+                    .group_by(TokenDB.id)\
+                    .order_by(desc(func.max(SocialMediaPostDB.timestamp)))
+            else:
+                query = query.group_by(TokenDB.id)\
+                    .order_by(desc(TokenDB.created_at))
+
+            # Get total count for pagination
+            total = query.count()
+
+            # Apply pagination and load relationships
+            tokens = query\
                 .options(
-                    joinedload(TokenDB.token_reports).joinedload(TokenReportDB.social_media_post),
-                    joinedload(TokenDB.token_opportunities)
-                )
-            
-            # Get all tokens
-            all_tokens = tokens.all()
-            
-            # Create a map to deduplicate tokens based on chain-specific address comparison
-            unique_tokens = {}
-            for token in all_tokens:
-                # For Base chain, use lowercase address as key
-                # For Solana chain, use original address as key
-                key = (
-                    token.chain,
-                    token.address.lower() if token.address.startswith('0x') else token.address
-                )
-                
-                if key not in unique_tokens:
-                    unique_tokens[key] = token
-                else:
-                    # If we find a duplicate, merge its reports and opportunities
-                    existing_token = unique_tokens[key]
-                    existing_token.token_reports.extend(token.token_reports)
-                    existing_token.token_opportunities.extend(token.token_opportunities)
-            
-            # Use the deduplicated tokens
-            tokens = list(unique_tokens.values())
-            
-            return [
+                    selectinload(TokenDB.token_reports).selectinload(TokenReportDB.social_media_post),
+                    selectinload(TokenDB.token_opportunities)
+                )\
+                .offset(page * per_page)\
+                .limit(per_page)\
+                .all()
+
+            # Convert tokens to response format
+            token_list = [
                 {
                     "id": token.id,
                     "symbol": token.symbol,
@@ -354,6 +390,14 @@ async def get_tokens():
                 }
                 for token in tokens
             ]
+            
+            return {
+                "tokens": token_list,
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "has_more": (page + 1) * per_page < total
+            }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

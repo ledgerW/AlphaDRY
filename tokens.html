@@ -16,7 +16,7 @@
                 <div class="controls-row">
                     <div class="control-group">
                         <label for="sort-select">Sort by:</label>
-                        <select id="sort-select" onchange="handleSort(this.value)">
+                        <select id="sort-select">
                             <option value="recent_opportunity">Last Update</option>
                             <option value="market_cap">Market Cap</option>
                             <option value="kol_events">KOL Events</option>
@@ -26,12 +26,12 @@
                     <div class="control-group">
                         <div class="chain-filters">
                             <label class="chain-option">
-                                <input type="checkbox" value="base" onchange="handleChainFilter()" checked>
+                                <input type="checkbox" value="base" checked>
                                 <img src="/static/base_icon.svg" alt="Base icon" class="chain-icon">
                                 <span>Base</span>
                             </label>
                             <label class="chain-option">
-                                <input type="checkbox" value="solana" onchange="handleChainFilter()" checked>
+                                <input type="checkbox" value="solana" checked>
                                 <img src="/static/solana_icon.svg" alt="Solana icon" class="chain-icon">
                                 <span>Solana</span>
                             </label>
@@ -41,26 +41,29 @@
                         <div class="controls-title">MARKET CAP</div>
                         <div class="market-cap-filters">
                             <label class="market-cap-option">
-                                <input type="radio" name="market-cap" value="all" onchange="handleMarketCapFilter()" checked>
+                                <input type="radio" name="market-cap" value="all" checked>
                                 <span>All</span>
                             </label>
                             <label class="market-cap-option">
-                                <input type="radio" name="market-cap" value="1000000000" onchange="handleMarketCapFilter()">
+                                <input type="radio" name="market-cap" value="1000000000">
                                 <span>< $1B</span>
                             </label>
                             <label class="market-cap-option">
-                                <input type="radio" name="market-cap" value="100000000" onchange="handleMarketCapFilter()">
+                                <input type="radio" name="market-cap" value="100000000">
                                 <span>< $100M</span>
                             </label>
                             <label class="market-cap-option">
-                                <input type="radio" name="market-cap" value="10000000" onchange="handleMarketCapFilter()">
+                                <input type="radio" name="market-cap" value="10000000">
                                 <span>< $10M</span>
                             </label>
                             <label class="market-cap-option">
-                                <input type="radio" name="market-cap" value="1000000" onchange="handleMarketCapFilter()">
+                                <input type="radio" name="market-cap" value="1000000">
                                 <span>< $1M</span>
                             </label>
                         </div>
+                    </div>
+                    <div class="control-group">
+                        <button id="apply-filters" class="apply-button">Apply Filters</button>
                     </div>
                 </div>
             </div>

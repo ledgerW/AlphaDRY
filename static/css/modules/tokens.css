@@ -414,3 +414,34 @@
     box-shadow: 0 4px 12px rgba(0, 255, 136, 0.2);
     background: rgba(0, 255, 136, 0.03);
 }
+
+.apply-button {
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid #00ff88;
+    border-radius: 5px;
+    color: #00ff88;
+    padding: 10px 24px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: bold;
+    margin-left: auto;
+}
+
+.apply-button:hover {
+    background: rgba(0, 255, 136, 0.1);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 255, 136, 0.2);
+}
+
+.apply-button:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+@media (max-width: 768px) {
+    .apply-button {
+        width: 100%;
+        margin: 0;
+    }
+}

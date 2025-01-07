@@ -1,10 +1,23 @@
-let tokensData = [];
-let selectedChains = ['base', 'solana'];
-let selectedMarketCap = 'all';
 let currentPage = 0;
 let isLoading = false;
 let hasMoreTokens = true;
 const TOKENS_PER_PAGE = 10;
+
+// Get filter values
+function getSelectedChains() {
+    return Array.from(document.querySelectorAll('.chain-option input:checked'))
+        .map(input => input.value)
+        .join(',');
+}
+
+function getSelectedMarketCap() {
+    const value = document.querySelector('input[name="market-cap"]:checked').value;
+    return value === 'all' ? null : Number(value);
+}
+
+function getSortBy() {
+    return document.getElementById('sort-select').value;
+}
 
 // Create intersection observer for infinite scroll
 const observer = new IntersectionObserver((entries) => {
@@ -77,176 +90,32 @@ function getLatestSocialPost(token) {
     ).date;
 }
 
-function handleChainFilter() {
-    selectedChains = Array.from(document.querySelectorAll('.chain-option input:checked'))
-        .map(input => input.value);
-    currentPage = 0;
-    hasMoreTokens = true;
-    applyFiltersAndSort();
-}
-
-function handleMarketCapFilter() {
-    selectedMarketCap = document.querySelector('input[name="market-cap"]:checked').value;
-    currentPage = 0;
-    hasMoreTokens = true;
-    applyFiltersAndSort();
-}
-
-function handleSort(sortBy) {
-    currentPage = 0;
-    hasMoreTokens = true;
-    applyFiltersAndSort(sortBy, false);
-}
-
-function applyFiltersAndSort(sortBy = document.getElementById('sort-select').value, loadMore = false) {
-    if (!tokensData.length) return;
-
-    // Create a Map to ensure unique tokens by address
-    const uniqueTokens = new Map();
-    
-    // First pass: Create unique token entries with base data
-    tokensData.forEach(token => {
-        // Only lowercase address for non-Solana chains to match database behavior
-        const address = token.chain.toLowerCase() === 'solana' ? token.address : token.address.toLowerCase();
-        if (!uniqueTokens.has(address)) {
-            uniqueTokens.set(address, {
-                id: token.id,
-                symbol: token.symbol,
-                name: token.name,
-                chain: token.chain,
-                address: token.address,
-                created_at: token.created_at,
-                image_url: token.image_url,
-                website_url: token.website_url,
-                warpcast_url: token.warpcast_url,
-                twitter_url: token.twitter_url,
-                telegram_url: token.telegram_url,
-                signal_url: token.signal_url,
-                token_reports: [],
-                token_opportunities: []
-            });
-        }
-    });
-    
-    // Second pass: Merge related data for each unique token
-    tokensData.forEach(token => {
-        // Only lowercase address for non-Solana chains to match database behavior
-        const address = token.chain.toLowerCase() === 'solana' ? token.address : token.address.toLowerCase();
-        const uniqueToken = uniqueTokens.get(address);
-        
-        // Add unique token_reports
-        if (token.token_reports) {
-            token.token_reports.forEach(report => {
-                // Check if this report is already included (by id)
-                const exists = uniqueToken.token_reports.some(r => r.id === report.id);
-                if (!exists) {
-                    uniqueToken.token_reports.push(report);
-                }
-            });
-        }
-        
-        // Add unique token_opportunities
-        if (token.token_opportunities) {
-            token.token_opportunities.forEach(opp => {
-                // Check if this opportunity is already included (by id)
-                const exists = uniqueToken.token_opportunities.some(o => o.id === opp.id);
-                if (!exists) {
-                    uniqueToken.token_opportunities.push(opp);
-                }
-            });
-        }
-    });
-
-    let filteredTokens = Array.from(uniqueTokens.values()).filter(token => {
-        // Chain filter
-        if (!selectedChains.includes(token.chain)) return false;
-
-        // Market cap filter
-        if (selectedMarketCap !== 'all') {
-            const latestOpp = getLatestOpportunity(token);
-            const marketCap = latestOpp?.market_cap || 0;
-            if (marketCap > Number(selectedMarketCap)) return false;
-        }
-
-        return true;
-    });
-
-    const sortedTokens = [...filteredTokens];
-    
-    if (sortBy === 'recent_opportunity') {
-        sortedTokens.sort((a, b) => {
-            const aOpp = getLatestOpportunity(a);
-            const bOpp = getLatestOpportunity(b);
-            
-            if (!aOpp && !bOpp) return 0;
-            if (!aOpp) return 1;
-            if (!bOpp) return -1;
-            
-            return new Date(bOpp.created_at) - new Date(aOpp.created_at);
-        });
-    } else if (sortBy === 'market_cap') {
-        sortedTokens.sort((a, b) => {
-            const aOpp = getLatestOpportunity(a);
-            const bOpp = getLatestOpportunity(b);
-            
-            const aMarketCap = aOpp?.market_cap || 0;
-            const bMarketCap = bOpp?.market_cap || 0;
-            
-            return bMarketCap - aMarketCap;
-        });
-    } else if (sortBy === 'kol_events') {
-        sortedTokens.sort((a, b) => {
-            const aEvents = calculateKoiEvents(a);
-            const bEvents = calculateKoiEvents(b);
-            return bEvents - aEvents;
-        });
-    } else if (sortBy === 'recent_social') {
-        sortedTokens.sort((a, b) => {
-            const aLatestPost = getLatestSocialPost(a);
-            const bLatestPost = getLatestSocialPost(b);
-            
-            if (!aLatestPost && !bLatestPost) return 0;
-            if (!aLatestPost) return 1;
-            if (!bLatestPost) return -1;
-            
-            return bLatestPost - aLatestPost;
-        });
-    }
-
-    // Calculate start and end indices for pagination
-    const startIndex = loadMore ? currentPage * TOKENS_PER_PAGE : 0;
-    const endIndex = startIndex + TOKENS_PER_PAGE;
-    
-    // Update current page
-    if (!loadMore) {
-        currentPage = 0;
-    }
-    
-    // Get the subset of tokens to display
-    const tokensToDisplay = sortedTokens.slice(startIndex, endIndex);
-    
-    // Check if we have more tokens to load
-    hasMoreTokens = endIndex < sortedTokens.length;
-    
-    // If loading more, increment the page counter
-    if (loadMore) {
-        currentPage++;
-    }
-    
-    // Display the tokens
-    displayTokens(tokensToDisplay, loadMore);
-}
-
-async function fetchTokens() {
+async function fetchTokens(page = 0) {
     try {
-        const response = await fetch('/api/tokens');
+        // Build URL with filter parameters
+        const params = new URLSearchParams({
+            page: page,
+            per_page: TOKENS_PER_PAGE,
+            chains: getSelectedChains(),
+            sort_by: getSortBy()
+        });
+
+        const marketCapMax = getSelectedMarketCap();
+        if (marketCapMax !== null) {
+            params.append('market_cap_max', marketCapMax);
+        }
+
+        const response = await fetch(`/api/tokens?${params}`);
         if (!response.ok) {
             throw new Error('Failed to fetch tokens');
         }
-        tokensData = await response.json();
-        currentPage = 0;
-        hasMoreTokens = true;
-        handleSort('recent_opportunity');
+        const data = await response.json();
+        
+        hasMoreTokens = data.has_more;
+        currentPage = data.page;
+        
+        // Display tokens
+        displayTokens(data.tokens, page > 0);
     } catch (error) {
         console.error('Error:', error);
         document.querySelector('.token-grid').innerHTML = `
@@ -257,13 +126,15 @@ async function fetchTokens() {
     }
 }
 
-function loadMoreTokens() {
+async function loadMoreTokens() {
     if (isLoading || !hasMoreTokens) return;
     
     isLoading = true;
-    const sortBy = document.getElementById('sort-select').value;
-    applyFiltersAndSort(sortBy, true);
-    isLoading = false;
+    try {
+        await fetchTokens(currentPage + 1);
+    } finally {
+        isLoading = false;
+    }
 }
 
 function displayTokens(tokens, append = false) {
@@ -389,5 +260,13 @@ function escapeHtml(unsafe) {
         .replace(/'/g, "&#039;");
 }
 
-// Load tokens when the page loads
-fetchTokens();
+// Add event listener for Apply button
+document.getElementById('apply-filters').addEventListener('click', () => {
+    // Reset to first page when applying filters
+    currentPage = 0;
+    hasMoreTokens = true;
+    fetchTokens(0);
+});
+
+// Initial load
+fetchTokens(0);
