@@ -267,12 +267,59 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+            margin-bottom: 12px;
+            gap: 12px;
         }
 
-        .token-name {
-            font-size: 1.2em;
+        .token-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            flex-shrink: 0;
+        }
+
+        .token-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        @media (max-width: 768px) {
+            .token-top {
+                gap: 8px;
+            }
+
+            .token-info {
+                align-items: flex-start;
+            }
+
+            .token-chain {
+                flex-shrink: 0;
+            }
+        }
+
+        .token-symbol {
+            color: rgba(0, 255, 136, 0.9);
+            font-size: 0.9em;
             font-weight: bold;
+        }
+
+        .token-address {
+            font-family: monospace;
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.7);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
         }
 
         .token-chain {
@@ -294,26 +341,6 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
-        }
-
-        .token-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .token-symbol {
-            color: rgba(0, 255, 136, 0.9);
-            font-size: 0.9em;
-        }
-
-        .token-address {
-            font-family: monospace;
-            font-size: 0.85em;
-            color: rgba(255, 255, 255, 0.7);
-            background: rgba(0, 0, 0, 0.3);
-            padding: 4px 8px;
-            border-radius: 4px;
         }
 
         .token-dates {
@@ -592,7 +619,11 @@
                 <a href="/token?address=${encodeURIComponent(token.address)}" class="token-link">
                     <div class="token-card">
                         <div class="token-top">
-                            <div class="token-name">${escapeHtml(token.name)}</div>
+                            <img src="${token.image_url || '/static/IMG_2358.png'}" class="token-icon" alt="${escapeHtml(token.symbol)} icon" />
+                            <div class="token-info">
+                                <div class="token-symbol">${escapeHtml(token.symbol)}</div>
+                                <div class="token-address">${truncateAddress(token.address)}</div>
+                            </div>
                             <div class="token-chain">
                                 <img src="/static/${token.chain === 'solana' ? 'solana_icon.svg' : 'base_icon.svg'}" 
                                      alt="${escapeHtml(token.chain)} icon" 
@@ -601,10 +632,6 @@
                             </div>
                         </div>
                         <div class="token-details">
-                            <div class="token-row">
-                                <div class="token-symbol">${escapeHtml(token.symbol)}</div>
-                                <div class="token-address">${truncateAddress(token.address)}</div>
-                            </div>
                             ${renderOpportunityDetails(token)}
                         </div>
                     </div>
