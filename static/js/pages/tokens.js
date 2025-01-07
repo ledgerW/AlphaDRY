@@ -18,13 +18,26 @@ const observer = new IntersectionObserver((entries) => {
 function calculateKoiEvents(token) {
     if (!token.token_reports) return 0;
     
-    return token.token_reports.reduce((total, report) => {
-        if (!report.social_media_post) return total;
+    // Count unique social media posts and their engagement
+    const uniquePosts = new Map(); // Use Map to track unique posts by ID
+    
+    token.token_reports.forEach(report => {
+        if (!report.social_media_post) return;
         const post = report.social_media_post;
-        return total + 1 + // Count the post itself
-            (post.reactions_count || 0) +
-            (post.replies_count || 0) +
-            (post.reposts_count || 0);
+        
+        // Only count each unique post once
+        if (!uniquePosts.has(post.id)) {
+            uniquePosts.set(post.id, {
+                reactions: post.reactions_count || 0,
+                replies: post.replies_count || 0,
+                reposts: post.reposts_count || 0
+            });
+        }
+    });
+
+    // Sum up all engagement from unique posts
+    return Array.from(uniquePosts.values()).reduce((total, post) => {
+        return total + 1 + post.reactions + post.replies + post.reposts;
     }, 0);
 }
 
@@ -32,11 +45,30 @@ function getLatestOpportunity(token) {
     if (!token.token_opportunities || token.token_opportunities.length === 0) {
         return null;
     }
-    return token.token_opportunities.reduce((latest, current) => {
-        const latestDate = new Date(latest.created_at);
-        const currentDate = new Date(current.created_at);
-        return currentDate > latestDate ? current : latest;
-    });
+    
+    // Sort opportunities by date and return the most recent one
+    const sortedOpps = [...token.token_opportunities].sort((a, b) => 
+        new Date(b.created_at) - new Date(a.created_at)
+    );
+    
+    return sortedOpps[0];
+}
+
+function getLatestSocialPost(token) {
+    if (!token.token_reports) return null;
+    
+    const postsWithDates = token.token_reports
+        .filter(report => report.social_media_post)
+        .map(report => ({
+            date: new Date(report.social_media_post.timestamp),
+            post: report.social_media_post
+        }));
+    
+    if (postsWithDates.length === 0) return null;
+    
+    return postsWithDates.reduce((latest, current) => 
+        current.date > latest.date ? current : latest
+    ).date;
 }
 
 function handleChainFilter() {
@@ -63,7 +95,15 @@ function handleSort(sortBy) {
 function applyFiltersAndSort(sortBy = document.getElementById('sort-select').value, loadMore = false) {
     if (!tokensData.length) return;
 
-    let filteredTokens = tokensData.filter(token => {
+    // Create a Map to ensure unique tokens by address
+    const uniqueTokens = new Map();
+    tokensData.forEach(token => {
+        if (!uniqueTokens.has(token.address)) {
+            uniqueTokens.set(token.address, token);
+        }
+    });
+
+    let filteredTokens = Array.from(uniqueTokens.values()).filter(token => {
         // Chain filter
         if (!selectedChains.includes(token.chain)) return false;
 
@@ -108,17 +148,8 @@ function applyFiltersAndSort(sortBy = document.getElementById('sort-select').val
         });
     } else if (sortBy === 'recent_social') {
         sortedTokens.sort((a, b) => {
-            const aLatestPost = a.token_reports?.reduce((latest, report) => {
-                if (!report.social_media_post) return latest;
-                const postDate = new Date(report.social_media_post.created_at);
-                return !latest || postDate > latest ? postDate : latest;
-            }, null);
-            
-            const bLatestPost = b.token_reports?.reduce((latest, report) => {
-                if (!report.social_media_post) return latest;
-                const postDate = new Date(report.social_media_post.created_at);
-                return !latest || postDate > latest ? postDate : latest;
-            }, null);
+            const aLatestPost = getLatestSocialPost(a);
+            const bLatestPost = getLatestSocialPost(b);
             
             if (!aLatestPost && !bLatestPost) return 0;
             if (!aLatestPost) return 1;
