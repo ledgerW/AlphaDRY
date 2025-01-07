@@ -319,15 +319,6 @@ async def get_tokens(
                 )
                 query = query.outerjoin(social_subquery, TokenDB.id == social_subquery.c.token_id)
 
-            # Apply market cap filter if specified
-            if market_cap_max is not None:
-                query = query.filter(
-                    or_(
-                        opp_subquery.c.max_market_cap.is_(None),
-                        opp_subquery.c.max_market_cap <= market_cap_max
-                    )
-                )
-
             # Apply cursor-based pagination
             if cursor:
                 cursor_data = cursor.split('_')
@@ -407,17 +398,33 @@ async def get_tokens(
                         )
                     )
 
-            # Apply sorting
+            # Apply sorting and related filters
             if sort_by == 'recent_opportunity':
+                # Only include tokens that have opportunities
+                query = query.filter(opp_subquery.c.max_created_at.isnot(None))
                 query = query.order_by(desc(opp_subquery.c.max_created_at))
+                # Apply market cap filter if specified
+                if market_cap_max is not None:
+                    query = query.filter(
+                        or_(
+                            opp_subquery.c.max_market_cap.is_(None),
+                            opp_subquery.c.max_market_cap <= market_cap_max
+                        )
+                    )
             elif sort_by == 'market_cap':
-                query = query.order_by(
-                    opp_subquery.c.max_market_cap.isnot(None).desc(),
-                    desc(opp_subquery.c.max_market_cap)
-                )
+                # Only include tokens that have market cap data
+                query = query.filter(opp_subquery.c.max_market_cap.isnot(None))
+                query = query.order_by(desc(opp_subquery.c.max_market_cap))
+                # Apply market cap filter if specified
+                if market_cap_max is not None:
+                    query = query.filter(opp_subquery.c.max_market_cap <= market_cap_max)
             elif sort_by == 'kol_events':
+                # Only include tokens that have KOL events
+                query = query.filter(kol_subquery.c.total_events > 0)
                 query = query.order_by(desc(kol_subquery.c.total_events))
             elif sort_by == 'recent_social':
+                # Only include tokens that have social media posts
+                query = query.filter(social_subquery.c.max_timestamp.isnot(None))
                 query = query.order_by(desc(social_subquery.c.max_timestamp))
             else:
                 query = query.order_by(desc(TokenDB.created_at))
