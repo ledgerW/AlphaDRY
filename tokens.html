@@ -43,20 +43,64 @@
         }
 
         @media (max-width: 768px) {
+            .content-wrapper {
+                padding: 0 15px;
+            }
+
             .control-group {
                 border-right: none;
                 border-bottom: 1px solid rgba(0, 255, 136, 0.2);
-                padding: 15px 0;
+                padding: 20px 15px;
                 width: 100%;
+                flex-direction: column;
+                align-items: flex-start;
             }
 
             .control-group:last-child {
                 border-bottom: none;
-                padding-bottom: 0;
+                padding-bottom: 20px;
             }
 
             .controls-row {
-                padding: 10px 15px;
+                padding: 0;
+                gap: 0;
+            }
+
+            #sort-select {
+                width: 100%;
+                margin-top: 8px;
+            }
+
+            .chain-filters,
+            .market-cap-filters {
+                width: 100%;
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                margin-top: 8px;
+            }
+
+            .market-cap-filters {
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            }
+
+            .chain-option,
+            .market-cap-option {
+                justify-content: center;
+                text-align: center;
+                width: 100%;
+            }
+
+            .controls label[for="sort-select"] {
+                margin-bottom: 0;
+            }
+
+            .controls-title {
+                margin-bottom: 0;
+            }
+
+            .market-cap-option span {
+                font-size: 0.9em;
             }
         }
 
@@ -288,7 +332,7 @@
             gap: 12px;
         }
 
-        .token-market-cap, .token-koi-events {
+        .token-market-cap, .token-kol-events {
             font-size: 0.9em;
             color: rgba(0, 255, 136, 0.9);
             font-weight: bold;
@@ -344,16 +388,15 @@
             <div class="controls">
                 <div class="controls-row">
                     <div class="control-group">
-                        <div class="controls-title">Sort Options</div>
                         <label for="sort-select">Sort by:</label>
                         <select id="sort-select" onchange="handleSort(this.value)">
                             <option value="recent_opportunity">Last Update</option>
                             <option value="market_cap">Market Cap</option>
-                            <option value="koi_events">KOI Events</option>
+                            <option value="kol_events">KOL Events</option>
+                            <option value="recent_social">Recent Social</option>
                         </select>
                     </div>
                     <div class="control-group">
-                        <div class="controls-title">Chain Filter</div>
                         <div class="chain-filters">
                             <label class="chain-option">
                                 <input type="checkbox" value="base" onchange="handleChainFilter()" checked>
@@ -368,7 +411,7 @@
                         </div>
                     </div>
                     <div class="control-group">
-                        <div class="controls-title">Market Cap Filter</div>
+                        <div class="controls-title">MARKET CAP</div>
                         <div class="market-cap-filters">
                             <label class="market-cap-option">
                                 <input type="radio" name="market-cap" value="all" onchange="handleMarketCapFilter()" checked>
@@ -376,15 +419,19 @@
                             </label>
                             <label class="market-cap-option">
                                 <input type="radio" name="market-cap" value="1000000000" onchange="handleMarketCapFilter()">
-                                <span>> $1B</span>
+                                <span>< $1B</span>
                             </label>
                             <label class="market-cap-option">
                                 <input type="radio" name="market-cap" value="100000000" onchange="handleMarketCapFilter()">
-                                <span>> $100M</span>
+                                <span>< $100M</span>
                             </label>
                             <label class="market-cap-option">
                                 <input type="radio" name="market-cap" value="10000000" onchange="handleMarketCapFilter()">
-                                <span>> $10M</span>
+                                <span>< $10M</span>
+                            </label>
+                            <label class="market-cap-option">
+                                <input type="radio" name="market-cap" value="1000000" onchange="handleMarketCapFilter()">
+                                <span>< $1M</span>
                             </label>
                         </div>
                     </div>
@@ -452,7 +499,7 @@
                 if (selectedMarketCap !== 'all') {
                     const latestOpp = getLatestOpportunity(token);
                     const marketCap = latestOpp?.market_cap || 0;
-                    if (marketCap < Number(selectedMarketCap)) return false;
+                    if (marketCap > Number(selectedMarketCap)) return false;
                 }
 
                 return true;
@@ -481,11 +528,31 @@
                     
                     return bMarketCap - aMarketCap;
                 });
-            } else if (sortBy === 'koi_events') {
+            } else if (sortBy === 'kol_events') {
                 sortedTokens.sort((a, b) => {
                     const aEvents = calculateKoiEvents(a);
                     const bEvents = calculateKoiEvents(b);
                     return bEvents - aEvents;
+                });
+            } else if (sortBy === 'recent_social') {
+                sortedTokens.sort((a, b) => {
+                    const aLatestPost = a.token_reports?.reduce((latest, report) => {
+                        if (!report.social_media_post) return latest;
+                        const postDate = new Date(report.social_media_post.created_at);
+                        return !latest || postDate > latest ? postDate : latest;
+                    }, null);
+                    
+                    const bLatestPost = b.token_reports?.reduce((latest, report) => {
+                        if (!report.social_media_post) return latest;
+                        const postDate = new Date(report.social_media_post.created_at);
+                        return !latest || postDate > latest ? postDate : latest;
+                    }, null);
+                    
+                    if (!aLatestPost && !bLatestPost) return 0;
+                    if (!aLatestPost) return 1;
+                    if (!bLatestPost) return -1;
+                    
+                    return bLatestPost - aLatestPost;
                 });
             }
 
@@ -572,7 +639,7 @@
                         <div><span class="date-label">Created:</span>${new Date(token.created_at).toLocaleDateString()}</div>
                     </div>
                     <div class="token-metrics">
-                        <div class="token-koi-events"><span class="metric-label">KOI Events:</span>${koiEvents.toLocaleString()}</div>
+                        <div class="token-kol-events"><span class="metric-label">KOL Events:</span>${koiEvents.toLocaleString()}</div>
                     </div>
                 `;
             }
@@ -584,7 +651,7 @@
                 </div>
                 <div class="token-metrics">
                     <div class="token-market-cap"><span class="metric-label">Market Cap:</span>${formatMarketCap(latestOpp.market_cap)}</div>
-                    <div class="token-koi-events"><span class="metric-label">KOI Events:</span>${koiEvents.toLocaleString()}</div>
+                    <div class="token-kol-events"><span class="metric-label">KOL Events:</span>${koiEvents.toLocaleString()}</div>
                 </div>
             `;
         }
