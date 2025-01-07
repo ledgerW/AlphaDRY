@@ -16,19 +16,76 @@
             padding: 0 40px;
         }
 
-        .sort-controls {
-            margin: 20px 0;
+        .controls {
+            margin: 20px 0 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+        }
+
+        .control-group {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
+            padding: 10px 30px 10px 0;
+            border-right: 1px solid rgba(0, 255, 136, 0.2);
+            min-width: 200px;
         }
 
-        .sort-controls label {
+        @media (max-width: 768px) {
+            .control-group {
+                border-right: none;
+                border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+                padding: 15px 0;
+                width: 100%;
+            }
+
+            .control-group:last-child {
+                border-bottom: none;
+                padding-bottom: 0;
+            }
+
+            .controls-row {
+                padding: 10px 15px;
+            }
+        }
+
+        .control-group:last-child {
+            border-right: none;
+            padding-right: 0;
+        }
+
+        @media (min-width: 769px) {
+            .control-group:last-child {
+                min-width: 300px;
+            }
+        }
+
+        .controls label {
             color: #00ff88;
             font-weight: bold;
+            white-space: nowrap;
         }
 
-        .sort-controls select {
+        .controls-title {
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(0, 255, 136, 0.7);
+            margin-bottom: 5px;
+        }
+
+        #sort-select {
             background: rgba(0, 0, 0, 0.7);
             border: 2px solid #00ff88;
             border-radius: 5px;
@@ -36,15 +93,94 @@
             padding: 8px 12px;
             font-size: 1em;
             cursor: pointer;
+            min-width: 140px;
         }
 
-        .sort-controls select:hover {
+        #sort-select:hover {
             background: rgba(0, 255, 136, 0.1);
         }
 
-        .sort-controls select:focus {
+        #sort-select:focus {
             outline: none;
             box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.3);
+        }
+
+        .chain-filters {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .chain-option {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 5px;
+            border: 2px solid rgba(0, 255, 136, 0.5);
+            background: rgba(0, 0, 0, 0.7);
+            color: #00ff88;
+            transition: all 0.2s ease;
+        }
+
+        .chain-option input[type="checkbox"] {
+            display: none;
+        }
+
+        .chain-option input[type="checkbox"]:checked + img + span,
+        .chain-option input[type="checkbox"]:checked + img {
+            opacity: 1;
+        }
+
+        .chain-option input[type="checkbox"]:not(:checked) + img + span,
+        .chain-option input[type="checkbox"]:not(:checked) + img {
+            opacity: 0.5;
+        }
+
+        .chain-option input[type="checkbox"]:checked ~ .chain-option {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+
+        .market-cap-filters {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .market-cap-option {
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 5px;
+            border: 2px solid rgba(0, 255, 136, 0.5);
+            background: rgba(0, 0, 0, 0.7);
+            color: #00ff88;
+            transition: all 0.2s ease;
+        }
+
+        .market-cap-option input[type="radio"] {
+            display: none;
+        }
+
+        .market-cap-option input[type="radio"]:checked + span {
+            opacity: 1;
+        }
+
+        .market-cap-option input[type="radio"]:not(:checked) + span {
+            opacity: 0.5;
+        }
+
+        .chain-option:hover,
+        .market-cap-option:hover {
+            background: rgba(0, 255, 136, 0.1);
+            border-color: #00ff88;
+        }
+
+        .chain-option input[type="checkbox"]:checked ~ .chain-option,
+        .market-cap-option input[type="radio"]:checked ~ .market-cap-option {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
         }
 
         .token-grid {
@@ -205,13 +341,54 @@
     <div class="container">
         <div class="content-wrapper">
             <h1>🚀 Token List 💎</h1>
-            <div class="sort-controls">
-                <label for="sort-select">Sort by:</label>
-                <select id="sort-select" onchange="handleSort(this.value)">
-                    <option value="recent_opportunity">Last Update</option>
-                    <option value="market_cap">Market Cap</option>
-                    <option value="koi_events">KOI Events</option>
-                </select>
+            <div class="controls">
+                <div class="controls-row">
+                    <div class="control-group">
+                        <div class="controls-title">Sort Options</div>
+                        <label for="sort-select">Sort by:</label>
+                        <select id="sort-select" onchange="handleSort(this.value)">
+                            <option value="recent_opportunity">Last Update</option>
+                            <option value="market_cap">Market Cap</option>
+                            <option value="koi_events">KOI Events</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <div class="controls-title">Chain Filter</div>
+                        <div class="chain-filters">
+                            <label class="chain-option">
+                                <input type="checkbox" value="base" onchange="handleChainFilter()" checked>
+                                <img src="/static/base_icon.svg" alt="Base icon" class="chain-icon">
+                                <span>Base</span>
+                            </label>
+                            <label class="chain-option">
+                                <input type="checkbox" value="solana" onchange="handleChainFilter()" checked>
+                                <img src="/static/solana_icon.svg" alt="Solana icon" class="chain-icon">
+                                <span>Solana</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <div class="controls-title">Market Cap Filter</div>
+                        <div class="market-cap-filters">
+                            <label class="market-cap-option">
+                                <input type="radio" name="market-cap" value="all" onchange="handleMarketCapFilter()" checked>
+                                <span>All</span>
+                            </label>
+                            <label class="market-cap-option">
+                                <input type="radio" name="market-cap" value="1000000000" onchange="handleMarketCapFilter()">
+                                <span>> $1B</span>
+                            </label>
+                            <label class="market-cap-option">
+                                <input type="radio" name="market-cap" value="100000000" onchange="handleMarketCapFilter()">
+                                <span>> $100M</span>
+                            </label>
+                            <label class="market-cap-option">
+                                <input type="radio" name="market-cap" value="10000000" onchange="handleMarketCapFilter()">
+                                <span>> $10M</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="token-grid">
                 <!-- Tokens will be dynamically inserted here -->
@@ -222,6 +399,8 @@
 
     <script>
         let tokensData = [];
+        let selectedChains = ['base', 'solana'];
+        let selectedMarketCap = 'all';
 
         function calculateKoiEvents(token) {
             if (!token.token_reports) return 0;
@@ -247,10 +426,39 @@
             });
         }
 
+        function handleChainFilter() {
+            selectedChains = Array.from(document.querySelectorAll('.chain-option input:checked'))
+                .map(input => input.value);
+            applyFiltersAndSort();
+        }
+
+        function handleMarketCapFilter() {
+            selectedMarketCap = document.querySelector('input[name="market-cap"]:checked').value;
+            applyFiltersAndSort();
+        }
+
         function handleSort(sortBy) {
+            applyFiltersAndSort(sortBy);
+        }
+
+        function applyFiltersAndSort(sortBy = document.getElementById('sort-select').value) {
             if (!tokensData.length) return;
 
-            const sortedTokens = [...tokensData];
+            let filteredTokens = tokensData.filter(token => {
+                // Chain filter
+                if (!selectedChains.includes(token.chain)) return false;
+
+                // Market cap filter
+                if (selectedMarketCap !== 'all') {
+                    const latestOpp = getLatestOpportunity(token);
+                    const marketCap = latestOpp?.market_cap || 0;
+                    if (marketCap < Number(selectedMarketCap)) return false;
+                }
+
+                return true;
+            });
+
+            const sortedTokens = [...filteredTokens];
             
             if (sortBy === 'recent_opportunity') {
                 sortedTokens.sort((a, b) => {
