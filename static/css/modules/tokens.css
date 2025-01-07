@@ -287,14 +287,25 @@
 @media (max-width: 768px) {
     .token-top {
         gap: 8px;
+        justify-content: center;
     }
 
     .token-info {
-        align-items: flex-start;
+        align-items: center;
+        text-align: center;
     }
 
     .token-chain {
         flex-shrink: 0;
+        order: 3;
+    }
+
+    .token-icon {
+        order: 1;
+    }
+
+    .token-info {
+        order: 2;
     }
 }
 
@@ -372,6 +383,12 @@
     grid-column: 1 / -1;
     padding: 20px;
     color: #00ff88;
+    width: 100%;
+    font-size: 0.9em;
+    opacity: 0.8;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 10px;
+    margin-top: 20px;
 }
 
 .error-message {

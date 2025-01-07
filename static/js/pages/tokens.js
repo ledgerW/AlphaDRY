@@ -1,6 +1,19 @@
 let tokensData = [];
 let selectedChains = ['base', 'solana'];
 let selectedMarketCap = 'all';
+let currentPage = 0;
+let isLoading = false;
+let hasMoreTokens = true;
+const TOKENS_PER_PAGE = 10;
+
+// Create intersection observer for infinite scroll
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting && !isLoading && hasMoreTokens) {
+            loadMoreTokens();
+        }
+    });
+}, { threshold: 0.1 });
 
 function calculateKoiEvents(token) {
     if (!token.token_reports) return 0;
@@ -29,19 +42,25 @@ function getLatestOpportunity(token) {
 function handleChainFilter() {
     selectedChains = Array.from(document.querySelectorAll('.chain-option input:checked'))
         .map(input => input.value);
+    currentPage = 0;
+    hasMoreTokens = true;
     applyFiltersAndSort();
 }
 
 function handleMarketCapFilter() {
     selectedMarketCap = document.querySelector('input[name="market-cap"]:checked').value;
+    currentPage = 0;
+    hasMoreTokens = true;
     applyFiltersAndSort();
 }
 
 function handleSort(sortBy) {
-    applyFiltersAndSort(sortBy);
+    currentPage = 0;
+    hasMoreTokens = true;
+    applyFiltersAndSort(sortBy, false);
 }
 
-function applyFiltersAndSort(sortBy = document.getElementById('sort-select').value) {
+function applyFiltersAndSort(sortBy = document.getElementById('sort-select').value, loadMore = false) {
     if (!tokensData.length) return;
 
     let filteredTokens = tokensData.filter(token => {
@@ -109,7 +128,28 @@ function applyFiltersAndSort(sortBy = document.getElementById('sort-select').val
         });
     }
 
-    displayTokens(sortedTokens);
+    // Calculate start and end indices for pagination
+    const startIndex = loadMore ? currentPage * TOKENS_PER_PAGE : 0;
+    const endIndex = startIndex + TOKENS_PER_PAGE;
+    
+    // Update current page
+    if (!loadMore) {
+        currentPage = 0;
+    }
+    
+    // Get the subset of tokens to display
+    const tokensToDisplay = sortedTokens.slice(startIndex, endIndex);
+    
+    // Check if we have more tokens to load
+    hasMoreTokens = endIndex < sortedTokens.length;
+    
+    // If loading more, increment the page counter
+    if (loadMore) {
+        currentPage++;
+    }
+    
+    // Display the tokens
+    displayTokens(tokensToDisplay, loadMore);
 }
 
 async function fetchTokens() {
@@ -119,6 +159,8 @@ async function fetchTokens() {
             throw new Error('Failed to fetch tokens');
         }
         tokensData = await response.json();
+        currentPage = 0;
+        hasMoreTokens = true;
         handleSort('recent_opportunity');
     } catch (error) {
         console.error('Error:', error);
@@ -130,18 +172,37 @@ async function fetchTokens() {
     }
 }
 
-function displayTokens(tokens) {
+function loadMoreTokens() {
+    if (isLoading || !hasMoreTokens) return;
+    
+    isLoading = true;
+    const sortBy = document.getElementById('sort-select').value;
+    applyFiltersAndSort(sortBy, true);
+    isLoading = false;
+}
+
+function displayTokens(tokens, append = false) {
+    const tokenGrid = document.querySelector('.token-grid');
+    
     if (!tokens || tokens.length === 0) {
-        document.querySelector('.token-grid').innerHTML = `
-            <div class="error-message">
-                <p>No tokens found.</p>
-            </div>
-        `;
+        if (!append) {
+            tokenGrid.innerHTML = `
+                <div class="error-message">
+                    <p>No tokens found.</p>
+                </div>
+            `;
+        }
         return;
     }
 
-    const tokenGrid = document.querySelector('.token-grid');
-    tokenGrid.innerHTML = tokens.map(token => `
+    // Remove existing loading element if it exists
+    const existingLoader = tokenGrid.querySelector('.loading');
+    if (existingLoader) {
+        existingLoader.remove();
+    }
+
+    // Create tokens HTML
+    const tokensHtml = tokens.map(token => `
         <a href="/token?address=${encodeURIComponent(token.address)}" class="token-link">
             <div class="token-card">
                 <div class="token-top">
@@ -163,6 +224,31 @@ function displayTokens(tokens) {
             </div>
         </a>
     `).join('');
+
+    if (append) {
+        // Remove the old loading indicator if it exists
+        const oldLoader = tokenGrid.querySelector('.loading');
+        if (oldLoader) {
+            oldLoader.remove();
+        }
+        
+        // Append new tokens
+        tokenGrid.insertAdjacentHTML('beforeend', tokensHtml);
+    } else {
+        // Replace all content
+        tokenGrid.innerHTML = tokensHtml;
+    }
+
+    // Add loading indicator if there are more tokens
+    if (hasMoreTokens) {
+        const loadingElement = document.createElement('div');
+        loadingElement.className = 'loading';
+        loadingElement.textContent = 'Loading more tokens...';
+        tokenGrid.appendChild(loadingElement);
+
+        // Observe the loading element
+        observer.observe(loadingElement);
+    }
 }
 
 function truncateAddress(address) {

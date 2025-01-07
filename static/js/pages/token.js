@@ -312,15 +312,97 @@ async function loadTokenData() {
             }
         });
 
-        // Get social posts from token reports
+                // Set up social posts with infinite scrolling
         const socialPosts = token.token_reports
             .filter(report => report.social_media_post)
             .map(report => report.social_media_post);
 
-        document.getElementById('social-posts').innerHTML = 
-            socialPosts.length > 0
-                ? socialPosts.map(post => createSocialPostHTML(post)).join('')
-                : '<p style="text-align: center;">No social posts found for this token.</p>';
+        // Initialize social posts pagination
+        let currentSocialPage = 0;
+        let isLoadingSocial = false;
+        let hasMoreSocialPosts = true;
+        const POSTS_PER_PAGE = 10;
+
+        // Create intersection observer for infinite scroll
+        const socialObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting && !isLoadingSocial && hasMoreSocialPosts) {
+                    loadMoreSocialPosts();
+                }
+            });
+        }, { threshold: 0.1 });
+
+        function displaySocialPosts(posts, append = false) {
+            const socialPostsContainer = document.getElementById('social-posts');
+            
+            if (!posts || posts.length === 0) {
+                if (!append) {
+                    socialPostsContainer.innerHTML = '<p style="text-align: center;">No social posts found for this token.</p>';
+                }
+                return;
+            }
+
+            // Remove existing loading element if it exists
+            const existingLoader = socialPostsContainer.querySelector('.loading');
+            if (existingLoader) {
+                existingLoader.remove();
+            }
+
+            // Create posts HTML
+            const postsHtml = posts.map(post => createSocialPostHTML(post)).join('');
+
+            if (append) {
+                // Remove the old loading indicator if it exists
+                const oldLoader = socialPostsContainer.querySelector('.loading');
+                if (oldLoader) {
+                    oldLoader.remove();
+                }
+                
+                // Append new posts
+                socialPostsContainer.insertAdjacentHTML('beforeend', postsHtml);
+            } else {
+                // Replace all content
+                socialPostsContainer.innerHTML = postsHtml;
+            }
+
+            // Add loading indicator if there are more posts
+            if (hasMoreSocialPosts) {
+                const loadingElement = document.createElement('div');
+                loadingElement.className = 'loading';
+                loadingElement.textContent = 'Loading more posts...';
+                socialPostsContainer.appendChild(loadingElement);
+
+                // Observe the loading element
+                socialObserver.observe(loadingElement);
+            }
+        }
+
+        function loadMoreSocialPosts() {
+            if (isLoadingSocial || !hasMoreSocialPosts) return;
+            
+            isLoadingSocial = true;
+            
+            // Calculate start and end indices for pagination
+            const startIndex = currentSocialPage * POSTS_PER_PAGE;
+            const endIndex = startIndex + POSTS_PER_PAGE;
+            
+            // Get the subset of posts to display
+            const postsToDisplay = socialPosts.slice(startIndex, endIndex);
+            
+            // Check if we have more posts to load
+            hasMoreSocialPosts = endIndex < socialPosts.length;
+            
+            // Display the posts
+            displaySocialPosts(postsToDisplay, currentSocialPage > 0);
+            
+            // Increment the page counter
+            currentSocialPage++;
+            
+            isLoadingSocial = false;
+        }
+
+        // Initial load of social posts
+        loadMoreSocialPosts();
 
     } catch (error) {
         console.error('Error loading token data:', error);
