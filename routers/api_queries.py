@@ -254,7 +254,7 @@ async def get_token(address: str):
 
 @router.get("/tokens")
 async def get_tokens(
-    page: int = 0,
+    cursor: Optional[str] = None,
     per_page: int = 10,
     chains: Optional[str] = None,
     market_cap_max: Optional[float] = None,
@@ -292,8 +292,14 @@ async def get_tokens(
                 query = query.group_by(TokenDB.id)\
                     .order_by(desc(func.max(TokenOpportunityDB.created_at)))
             elif sort_by == 'market_cap':
+                # Order by market cap descending, with nulls last
                 query = query.group_by(TokenDB.id)\
-                    .order_by(desc(func.max(TokenOpportunityDB.market_cap)))
+                    .order_by(
+                        # Put non-null values first
+                        func.max(TokenOpportunityDB.market_cap).isnot(None).desc(),
+                        # Then sort by actual value descending
+                        desc(func.max(TokenOpportunityDB.market_cap))
+                    )
             elif sort_by == 'kol_events':
                 query = query.outerjoin(TokenDB.token_reports)\
                     .outerjoin(TokenReportDB.social_media_post)\
@@ -313,18 +319,120 @@ async def get_tokens(
                 query = query.group_by(TokenDB.id)\
                     .order_by(desc(TokenDB.created_at))
 
-            # Get total count for pagination
-            total = query.count()
+            # Apply cursor-based pagination
+            if cursor:
+                cursor_data = cursor.split('_')
+                if sort_by == 'market_cap':
+                    # For market cap sorting, cursor is market_cap_id
+                    market_cap_value = float(cursor_data[0]) if cursor_data[0] != 'null' else None
+                    token_id = int(cursor_data[1])
+                    query = query.filter(
+                        or_(
+                            # Either market cap is less than cursor value
+                            func.max(TokenOpportunityDB.market_cap) < market_cap_value,
+                            # Or equal market cap but higher token ID (for stable sorting)
+                            and_(
+                                func.max(TokenOpportunityDB.market_cap) == market_cap_value,
+                                TokenDB.id > token_id
+                            )
+                        )
+                    )
+                elif sort_by == 'recent_opportunity':
+                    # For recent opportunity, cursor is timestamp_id
+                    timestamp = datetime.fromisoformat(cursor_data[0])
+                    token_id = int(cursor_data[1])
+                    query = query.filter(
+                        or_(
+                            func.max(TokenOpportunityDB.created_at) < timestamp,
+                            and_(
+                                func.max(TokenOpportunityDB.created_at) == timestamp,
+                                TokenDB.id > token_id
+                            )
+                        )
+                    )
+                elif sort_by == 'kol_events':
+                    # For KOL events, cursor is events_id
+                    events = int(cursor_data[0])
+                    token_id = int(cursor_data[1])
+                    kol_expr = (
+                        func.count(TokenReportDB.id) +
+                        func.coalesce(func.sum(SocialMediaPostDB.reactions_count), 0) +
+                        func.coalesce(func.sum(SocialMediaPostDB.replies_count), 0) +
+                        func.coalesce(func.sum(SocialMediaPostDB.reposts_count), 0)
+                    )
+                    query = query.filter(
+                        or_(
+                            kol_expr < events,
+                            and_(
+                                kol_expr == events,
+                                TokenDB.id > token_id
+                            )
+                        )
+                    )
+                elif sort_by == 'recent_social':
+                    # For recent social, cursor is timestamp_id
+                    timestamp = datetime.fromisoformat(cursor_data[0])
+                    token_id = int(cursor_data[1])
+                    query = query.filter(
+                        or_(
+                            func.max(SocialMediaPostDB.timestamp) < timestamp,
+                            and_(
+                                func.max(SocialMediaPostDB.timestamp) == timestamp,
+                                TokenDB.id > token_id
+                            )
+                        )
+                    )
+                else:
+                    # Default sort by created_at
+                    timestamp = datetime.fromisoformat(cursor_data[0])
+                    token_id = int(cursor_data[1])
+                    query = query.filter(
+                        or_(
+                            TokenDB.created_at < timestamp,
+                            and_(
+                                TokenDB.created_at == timestamp,
+                                TokenDB.id > token_id
+                            )
+                        )
+                    )
 
-            # Apply pagination and load relationships
+            # Fetch tokens with relationships
             tokens = query\
+                .group_by(TokenDB.id)\
+                .limit(per_page + 1)\
                 .options(
                     selectinload(TokenDB.token_reports).selectinload(TokenReportDB.social_media_post),
                     selectinload(TokenDB.token_opportunities)
                 )\
-                .offset(page * per_page)\
-                .limit(per_page)\
                 .all()
+
+            # Check if there are more tokens
+            has_more = len(tokens) > per_page
+            if has_more:
+                tokens = tokens[:-1]  # Remove the extra token we fetched
+
+            # Generate next cursor
+            next_cursor = None
+            if has_more and tokens:
+                last_token = tokens[-1]
+                if sort_by == 'market_cap':
+                    last_market_cap = max((opp.market_cap for opp in last_token.token_opportunities if opp.market_cap is not None), default=None)
+                    next_cursor = f"{str(last_market_cap) if last_market_cap is not None else 'null'}_{last_token.id}"
+                elif sort_by == 'recent_opportunity':
+                    last_opp_date = max((opp.created_at for opp in last_token.token_opportunities), default=last_token.created_at)
+                    next_cursor = f"{last_opp_date.isoformat()}_{last_token.id}"
+                elif sort_by == 'kol_events':
+                    last_events = sum(1 + (report.social_media_post.reactions_count or 0) + 
+                                   (report.social_media_post.replies_count or 0) + 
+                                   (report.social_media_post.reposts_count or 0)
+                                   for report in last_token.token_reports if report.social_media_post)
+                    next_cursor = f"{last_events}_{last_token.id}"
+                elif sort_by == 'recent_social':
+                    last_social = max((report.social_media_post.timestamp for report in last_token.token_reports 
+                                    if report.social_media_post), default=last_token.created_at)
+                    next_cursor = f"{last_social.isoformat()}_{last_token.id}"
+                else:
+                    next_cursor = f"{last_token.created_at.isoformat()}_{last_token.id}"
 
             # Convert tokens to response format
             token_list = [
@@ -393,10 +501,8 @@ async def get_tokens(
             
             return {
                 "tokens": token_list,
-                "total": total,
-                "page": page,
-                "per_page": per_page,
-                "has_more": (page + 1) * per_page < total
+                "next_cursor": next_cursor,
+                "has_more": has_more
             }
     except Exception as e:
         raise HTTPException(

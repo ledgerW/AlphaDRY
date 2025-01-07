@@ -1,4 +1,4 @@
-let currentPage = 0;
+let nextCursor = null;
 let isLoading = false;
 let hasMoreTokens = true;
 const TOKENS_PER_PAGE = 10;
@@ -90,15 +90,18 @@ function getLatestSocialPost(token) {
     ).date;
 }
 
-async function fetchTokens(page = 0) {
+async function fetchTokens(cursor = null) {
     try {
         // Build URL with filter parameters
         const params = new URLSearchParams({
-            page: page,
             per_page: TOKENS_PER_PAGE,
             chains: getSelectedChains(),
             sort_by: getSortBy()
         });
+
+        if (cursor) {
+            params.append('cursor', cursor);
+        }
 
         const marketCapMax = getSelectedMarketCap();
         if (marketCapMax !== null) {
@@ -112,10 +115,10 @@ async function fetchTokens(page = 0) {
         const data = await response.json();
         
         hasMoreTokens = data.has_more;
-        currentPage = data.page;
+        nextCursor = data.next_cursor;
         
         // Display tokens
-        displayTokens(data.tokens, page > 0);
+        displayTokens(data.tokens, cursor !== null);
     } catch (error) {
         console.error('Error:', error);
         document.querySelector('.token-grid').innerHTML = `
@@ -127,11 +130,11 @@ async function fetchTokens(page = 0) {
 }
 
 async function loadMoreTokens() {
-    if (isLoading || !hasMoreTokens) return;
+    if (isLoading || !hasMoreTokens || !nextCursor) return;
     
     isLoading = true;
     try {
-        await fetchTokens(currentPage + 1);
+        await fetchTokens(nextCursor);
     } finally {
         isLoading = false;
     }
@@ -155,6 +158,15 @@ function displayTokens(tokens, append = false) {
     const existingLoader = tokenGrid.querySelector('.loading');
     if (existingLoader) {
         existingLoader.remove();
+    }
+
+    // When appending, filter out tokens that are already displayed
+    if (append) {
+        const existingTokens = new Set(
+            Array.from(tokenGrid.querySelectorAll('.token-link'))
+                .map(el => el.getAttribute('href').split('=')[1])
+        );
+        tokens = tokens.filter(token => !existingTokens.has(encodeURIComponent(token.address)));
     }
 
     // Create tokens HTML
@@ -262,11 +274,11 @@ function escapeHtml(unsafe) {
 
 // Add event listener for Apply button
 document.getElementById('apply-filters').addEventListener('click', () => {
-    // Reset to first page when applying filters
-    currentPage = 0;
+    // Reset cursor when applying filters
+    nextCursor = null;
     hasMoreTokens = true;
-    fetchTokens(0);
+    fetchTokens(null);
 });
 
 // Initial load
-fetchTokens(0);
+fetchTokens(null);
