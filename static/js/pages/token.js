@@ -2,10 +2,17 @@ import { fetchToken, runTokenAlphaScout } from '/static/js/api/alphaApi.js';
 import { escapeHtml } from '/static/js/utils/formatting.js';
 
 function createOpportunityHTML(opportunity) {
+    // Create source links HTML if sources are available
+    const sourceLinks = opportunity.sources ? opportunity.sources
+        .filter(url => url) // Filter out null/empty URLs
+        .map(url => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`)
+        .join('<br>') : '';
+
     return `
         <div class="token-opportunity">
             <p><strong>Market Cap:</strong> ${opportunity.market_cap ? '$' + opportunity.market_cap.toLocaleString() : 'N/A'}</p>
             <p>${escapeHtml(opportunity.justification)}</p>
+            ${sourceLinks ? `<div class="source-links"><strong>Sources:</strong><br>${sourceLinks}</div>` : ''}
             <p class="timestamp">${new Date(opportunity.created_at).toLocaleString()}</p>
         </div>
     `;

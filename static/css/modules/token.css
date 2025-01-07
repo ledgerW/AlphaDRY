@@ -168,6 +168,28 @@
     word-break: break-word;
 }
 
+.source-links {
+    margin: 10px 0;
+    padding: 10px;
+    background: rgba(0, 255, 136, 0.1);
+    border-radius: 5px;
+}
+
+.source-links a {
+    color: #00ff88;
+    text-decoration: none;
+    display: inline-block;
+    margin: 5px 0;
+    font-size: 0.9em;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.source-links a:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
 .token-name {
     font-size: 24px;
     font-weight: bold;
