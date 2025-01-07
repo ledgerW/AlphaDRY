@@ -28,6 +28,8 @@ async def fetch_dex_screener_data(token_address: str) -> Optional[Dict[str, Any]
                     'image_url': pair.get('info', {}).get('imageUrl'),
                     'website_url': next((w['url'] for w in pair.get('info', {}).get('websites', []) 
                                       if w.get('label') == 'Website'), None),
+                    'warpcast_url': next((w['url'] for w in pair.get('info', {}).get('websites', []) 
+                                      if w.get('label') == 'Farcaster'), None),
                     'twitter_url': next((s['url'] for s in pair.get('info', {}).get('socials', []) 
                                       if s.get('type') == 'twitter'), None),
                     'telegram_url': next((s['url'] for s in pair.get('info', {}).get('socials', []) 
