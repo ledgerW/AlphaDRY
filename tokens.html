@@ -10,6 +10,9 @@
         .container {
             max-width: 1600px;
             margin: 0 auto;
+        }
+
+        .content-wrapper {
             padding: 0 40px;
         }
 
@@ -48,7 +51,7 @@
             display: grid;
             grid-template-columns: 1fr;
             gap: 20px;
-            padding: 40px 0;
+            padding-top: 40px;
         }
 
         @media (min-width: 768px) {
@@ -80,12 +83,11 @@
             gap: 10px;
         }
 
-        .token-header {
+        .token-top {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding-bottom: 10px;
-            border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+            margin-bottom: 10px;
         }
 
         .token-name {
@@ -201,18 +203,20 @@
 </head>
 <body>
     <div class="container">
-        <h1>🚀 Token List 💎</h1>
-        <div class="sort-controls">
-            <label for="sort-select">Sort by:</label>
-            <select id="sort-select" onchange="handleSort(this.value)">
-                <option value="recent_opportunity">Last Update</option>
-                <option value="market_cap">Market Cap</option>
-                <option value="koi_events">KOI Events</option>
-            </select>
-        </div>
-        <div class="token-grid">
-            <!-- Tokens will be dynamically inserted here -->
-            <div class="loading">Loading tokens...</div>
+        <div class="content-wrapper">
+            <h1>🚀 Token List 💎</h1>
+            <div class="sort-controls">
+                <label for="sort-select">Sort by:</label>
+                <select id="sort-select" onchange="handleSort(this.value)">
+                    <option value="recent_opportunity">Last Update</option>
+                    <option value="market_cap">Market Cap</option>
+                    <option value="koi_events">KOI Events</option>
+                </select>
+            </div>
+            <div class="token-grid">
+                <!-- Tokens will be dynamically inserted here -->
+                <div class="loading">Loading tokens...</div>
+            </div>
         </div>
     </div>
 
@@ -312,7 +316,7 @@
             tokenGrid.innerHTML = tokens.map(token => `
                 <a href="/token?address=${encodeURIComponent(token.address)}" class="token-link">
                     <div class="token-card">
-                        <div class="token-header">
+                        <div class="token-top">
                             <div class="token-name">${escapeHtml(token.name)}</div>
                             <div class="token-chain">
                                 <img src="/static/${token.chain === 'solana' ? 'solana_icon.svg' : 'base_icon.svg'}" 

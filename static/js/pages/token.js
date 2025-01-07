@@ -254,11 +254,30 @@ async function loadTokenData() {
                 this.textContent = '🚀 🔬 Running Analysis...';
                 this.style.animation = 'pulse 1.5s infinite';
                 
-                if (!token.latest_report) {
-                    throw new Error('Cannot run analysis: No previous token report available. Please create an initial token report first.');
+                if (!token.latest_report || !token.latest_report.id) {
+                    throw new Error('Cannot run analysis: No valid token report available. Please ensure there is a complete token report with all required fields.');
                 }
 
                 console.log('Using latest report:', token.latest_report);
+                
+                // Validate required fields before proceeding
+                const requiredFields = [
+                    'mentions_purchasable_token',
+                    'token_symbol',
+                    'token_chain',
+                    'token_address',
+                    'is_listed_on_dex',
+                    'confidence_score',
+                    'reasoning'
+                ];
+                
+                const missingFields = requiredFields.filter(field => 
+                    token.latest_report[field] === undefined || token.latest_report[field] === null
+                );
+                
+                if (missingFields.length > 0) {
+                    throw new Error(`Cannot run analysis: Latest report is missing required fields: ${missingFields.join(', ')}`);
+                }
 
                 const formattedReport = {
                     mentions_purchasable_token: token.latest_report.mentions_purchasable_token,
@@ -271,12 +290,18 @@ async function loadTokenData() {
                     reasoning: token.latest_report.reasoning
                 };
 
-                const result = await runTokenAlphaScout(formattedReport, token.latest_report.id);
-                
-                if (result) {
+                try {
+                    const result = await runTokenAlphaScout(formattedReport, token.latest_report.id);
+                    
+                    if (!result) {
+                        throw new Error('Empty response from alpha scout');
+                    }
+                    
+                    // Add a small delay before reload to ensure all operations complete
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                     window.location.reload();
-                } else {
-                    throw new Error('Failed to get analysis result');
+                } catch (error) {
+                    throw new Error(`Alpha scout analysis failed: ${error.message}`);
                 }
             } catch (error) {
                 console.error('Error running alpha scout:', error);

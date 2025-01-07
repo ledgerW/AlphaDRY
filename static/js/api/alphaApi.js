@@ -43,7 +43,14 @@ export async function submitReport() {
         errorMessage.style.display = 'none';
         
         // Get API key from meta tag
-        const apiKey = document.querySelector('meta[name="api-key"]').content;
+        const apiKeyMeta = document.querySelector('meta[name="api-key"]');
+        if (!apiKeyMeta) {
+            throw new Error('API key meta tag not found');
+        }
+        const apiKey = apiKeyMeta.content;
+        if (!apiKey) {
+            throw new Error('API key is missing');
+        }
         
         // Create IsTokenReport object matching the Pydantic model
         const tokenReport = {
@@ -110,17 +117,19 @@ export async function fetchToken(address) {
     const data = await response.json();
     
     // Add latest report if available
-    if (data.token_reports && data.token_reports.length > 0) {
+    if (data.token_reports && Array.isArray(data.token_reports) && data.token_reports.length > 0) {
         // Sort reports by date and get the latest
-        data.token_reports.sort((a, b) => {
-            const dateA = new Date(b.created_at || b.timestamp || 0);
-            const dateB = new Date(a.created_at || a.timestamp || 0);
-            return dateA - dateB;
-        });
+        const validReports = data.token_reports.filter(report => report && typeof report === 'object');
         
-        // Get the latest report and validate required fields
-        const latestReport = data.token_reports[0];
-        if (latestReport) {
+        if (validReports.length > 0) {
+            validReports.sort((a, b) => {
+                const dateA = new Date(b.created_at || b.timestamp || 0);
+                const dateB = new Date(a.created_at || a.timestamp || 0);
+                return dateA - dateB;
+            });
+            
+            // Get the latest report and validate required fields
+            const latestReport = validReports[0];
             const requiredFields = [
                 'mentions_purchasable_token',
                 'token_symbol',
@@ -137,6 +146,8 @@ export async function fetchToken(address) {
 
             if (missingFields.length === 0) {
                 data.latest_report = latestReport;
+            } else {
+                console.warn('Latest report missing required fields:', missingFields);
             }
         }
     }
@@ -173,7 +184,20 @@ export async function runTokenAlphaScout(tokenReport, tokenReportId) {
         }
 
         const result = await response.json();
+        console.log('Alpha scout response:', result);
+
+        if (!result || typeof result !== 'object') {
+            throw new Error('Invalid response from alpha scout');
+        }
+
+        // Ensure we have all required fields from TokenOpportunity model
+        const requiredFields = ['name', 'chain', 'justification', 'sources', 'recommendation'];
+        const missingFields = requiredFields.filter(field => !result[field]);
         
+        if (missingFields.length > 0) {
+            throw new Error(`Invalid response: missing required fields ${missingFields.join(', ')}`);
+        }
+
         // Add a small delay to ensure database operations complete
         await new Promise(resolve => setTimeout(resolve, 1000));
         
