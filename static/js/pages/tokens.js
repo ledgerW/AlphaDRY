@@ -92,25 +92,49 @@ function getLatestSocialPost(token) {
 
 async function fetchTokens(cursor = null) {
     try {
+        console.log('Fetching tokens with cursor:', cursor);  // Debug log
+        
         // Build URL with filter parameters
-        const params = new URLSearchParams({
-            per_page: TOKENS_PER_PAGE,
-            chains: getSelectedChains(),
-            sort_by: getSortBy()
-        });
-
+        const params = new URLSearchParams();
+        
+        // Add required parameters
+        params.append('per_page', TOKENS_PER_PAGE);
+        
+        // Add chain filter
+        const chains = getSelectedChains();
+        if (chains) {
+            params.append('chains', chains);
+        }
+        
+        // Add sort parameter
+        const sortBy = getSortBy();
+        if (sortBy) {
+            params.append('sort_by', sortBy);
+        }
+        
+        // Add cursor if provided
         if (cursor) {
             params.append('cursor', cursor);
         }
 
+        // Add market cap filter if selected
         const marketCapMax = getSelectedMarketCap();
         if (marketCapMax !== null) {
             params.append('market_cap_max', marketCapMax);
         }
 
+        console.log('Request parameters:', {
+            cursor,
+            chains,
+            sortBy,
+            marketCapMax,
+            params: params.toString()
+        });  // Debug log
+
         const response = await fetch(`/api/tokens?${params}`);
         if (!response.ok) {
-            throw new Error('Failed to fetch tokens');
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch tokens: ${response.status} ${errorText}`);
         }
         const data = await response.json();
         
@@ -120,10 +144,17 @@ async function fetchTokens(cursor = null) {
         // Display tokens
         displayTokens(data.tokens, cursor !== null);
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error fetching tokens:', error);
+        console.error('Request details:', {
+            cursor,
+            chains: getSelectedChains(),
+            sortBy: getSortBy(),
+            marketCapMax: getSelectedMarketCap()
+        });
         document.querySelector('.token-grid').innerHTML = `
             <div class="error-message">
                 <p>Error loading tokens. Please try again later.</p>
+                <p class="error-details">${error.message}</p>
             </div>
         `;
     }

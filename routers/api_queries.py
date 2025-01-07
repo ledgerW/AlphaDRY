@@ -505,6 +505,14 @@ async def get_tokens(
                 "has_more": has_more
             }
     except Exception as e:
+        print(f"Error in get_tokens: {str(e)}")  # Add detailed logging
+        print(f"Request parameters - cursor: {cursor}, sort_by: {sort_by}, chains: {chains}, market_cap_max: {market_cap_max}")
+        if cursor:
+            try:
+                cursor_data = cursor.split('_')
+                print(f"Cursor data: {cursor_data}")
+            except Exception as cursor_error:
+                print(f"Error parsing cursor: {cursor_error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch tokens: {str(e)}"
