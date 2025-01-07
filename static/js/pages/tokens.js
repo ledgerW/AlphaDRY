@@ -101,29 +101,59 @@ function handleSort(sortBy) {
 function applyFiltersAndSort(sortBy = document.getElementById('sort-select').value, loadMore = false) {
     if (!tokensData.length) return;
 
-    // Create a Map to ensure unique tokens by address while merging token_reports
+    // Create a Map to ensure unique tokens by address
     const uniqueTokens = new Map();
+    
+    // First pass: Create unique token entries with base data
     tokensData.forEach(token => {
-        if (!uniqueTokens.has(token.address)) {
-            // Initialize the token with its data
-            uniqueTokens.set(token.address, {
-                ...token,
+        // Only lowercase address for non-Solana chains to match database behavior
+        const address = token.chain.toLowerCase() === 'solana' ? token.address : token.address.toLowerCase();
+        if (!uniqueTokens.has(address)) {
+            uniqueTokens.set(address, {
+                id: token.id,
+                symbol: token.symbol,
+                name: token.name,
+                chain: token.chain,
+                address: token.address,
+                created_at: token.created_at,
+                image_url: token.image_url,
+                website_url: token.website_url,
+                warpcast_url: token.warpcast_url,
+                twitter_url: token.twitter_url,
+                telegram_url: token.telegram_url,
+                signal_url: token.signal_url,
                 token_reports: [],
                 token_opportunities: []
             });
         }
+    });
+    
+    // Second pass: Merge related data for each unique token
+    tokensData.forEach(token => {
+        // Only lowercase address for non-Solana chains to match database behavior
+        const address = token.chain.toLowerCase() === 'solana' ? token.address : token.address.toLowerCase();
+        const uniqueToken = uniqueTokens.get(address);
         
-        // Get the existing token from the Map
-        const existingToken = uniqueTokens.get(token.address);
-        
-        // Merge token_reports if they exist
+        // Add unique token_reports
         if (token.token_reports) {
-            existingToken.token_reports = existingToken.token_reports.concat(token.token_reports);
+            token.token_reports.forEach(report => {
+                // Check if this report is already included (by id)
+                const exists = uniqueToken.token_reports.some(r => r.id === report.id);
+                if (!exists) {
+                    uniqueToken.token_reports.push(report);
+                }
+            });
         }
         
-        // Merge token_opportunities if they exist
+        // Add unique token_opportunities
         if (token.token_opportunities) {
-            existingToken.token_opportunities = existingToken.token_opportunities.concat(token.token_opportunities);
+            token.token_opportunities.forEach(opp => {
+                // Check if this opportunity is already included (by id)
+                const exists = uniqueToken.token_opportunities.some(o => o.id === opp.id);
+                if (!exists) {
+                    uniqueToken.token_opportunities.push(opp);
+                }
+            });
         }
     });
 

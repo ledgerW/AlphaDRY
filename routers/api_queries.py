@@ -257,6 +257,7 @@ async def get_tokens():
     """Get all tokens from the database that have addresses, ordered by creation date."""
     try:
         with get_session() as session:
+            # Query tokens with proper case handling for addresses
             tokens = session.query(TokenDB)\
                 .filter(TokenDB.address.isnot(None))\
                 .filter(func.lower(TokenDB.chain).in_(['base', 'solana']))\
@@ -264,8 +265,31 @@ async def get_tokens():
                 .options(
                     joinedload(TokenDB.token_reports).joinedload(TokenReportDB.social_media_post),
                     joinedload(TokenDB.token_opportunities)
-                )\
-                .all()
+                )
+            
+            # Get all tokens
+            all_tokens = tokens.all()
+            
+            # Create a map to deduplicate tokens based on chain-specific address comparison
+            unique_tokens = {}
+            for token in all_tokens:
+                # For Base chain, use lowercase address as key
+                # For Solana chain, use original address as key
+                key = (
+                    token.chain,
+                    token.address.lower() if token.address.startswith('0x') else token.address
+                )
+                
+                if key not in unique_tokens:
+                    unique_tokens[key] = token
+                else:
+                    # If we find a duplicate, merge its reports and opportunities
+                    existing_token = unique_tokens[key]
+                    existing_token.token_reports.extend(token.token_reports)
+                    existing_token.token_opportunities.extend(token.token_opportunities)
+            
+            # Use the deduplicated tokens
+            tokens = list(unique_tokens.values())
             
             return [
                 {
