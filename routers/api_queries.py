@@ -21,16 +21,12 @@ async def get_latest_warpcast(username: str):
     try:
         with get_session() as session:
             # Query for the latest post by this user
-            query = select(SocialMediaPostDB).where(
+            post = session.query(SocialMediaPostDB).filter(
                 SocialMediaPostDB.author_username == username,
                 SocialMediaPostDB.source == "warpcast"
-            ).order_by(desc(SocialMediaPostDB.original_timestamp)).limit(1)
+            ).order_by(desc(SocialMediaPostDB.original_timestamp)).first()
             
-            result = session.execute(query).first()
-            
-            if result:
-                # Return the timestamp of the latest post
-                post = result[0]
+            if post:
                 return {
                     "username": username,
                     "latest_timestamp": post.original_timestamp.isoformat(),

@@ -29,10 +29,10 @@ logging.basicConfig(
 )
 
 
-PRIMARY_USER = 'drypowder'
-PRIMARY_USER_FID = 887822
-#PRIMARY_USER = 'ledgerwest.eth'
-#PRIMARY_USER_FID = 383351
+#PRIMARY_USER = 'drypowder'
+#PRIMARY_USER_FID = 887822
+PRIMARY_USER = 'ledgerwest.eth'
+PRIMARY_USER_FID = 383351
 
 async def get_following_usernames(client):
     """Get list of usernames that PRIMARY_USER is following"""
@@ -212,7 +212,7 @@ async def scout_warpcasts(test_mode: bool = False):
         return
     
     # Set parameters based on test mode
-    total_casts_target = 3 if test_mode else len(following_usernames) * 10
+    total_casts_target = 2 if test_mode else len(following_usernames) * 10
     
     # Use lists to allow modification in nested functions
     total_processed = [0]

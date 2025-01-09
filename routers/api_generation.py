@@ -244,80 +244,94 @@ async def get_multi_agent_alpha_scout(data: dict):
 )
 async def analyze_social_post(input_data: SocialMediaInput, existing_session=None):
     """Analyze social media post text for token mentions and create a token report."""
+    session = existing_session or get_session()
+    manage_session = not existing_session
+    
+    if manage_session:
+        session.begin()
+    
     try:
         # Convert input data to dict and handle datetime serialization
         raw_data = input_data.dict()
         if raw_data.get('original_timestamp'):
             raw_data['original_timestamp'] = raw_data['original_timestamp'].isoformat()
 
-        # Create social media post entry
-        post_data = {
-            "source": input_data.source,
-            "post_id": input_data.post_id or f"generated_{int(datetime.utcnow().timestamp())}",
-            "author_id": input_data.author_id,
-            "author_username": input_data.author_username,
-            "author_display_name": input_data.author_display_name,
-            "text": input_data.text,
-            "original_timestamp": input_data.original_timestamp or datetime.utcnow(),  # Use current time if not provided
-            "timestamp": datetime.utcnow(),  # When we process the post
-            "reactions_count": input_data.reactions_count,
-            "replies_count": input_data.replies_count,
-            "reposts_count": input_data.reposts_count,
-            "raw_data": raw_data  # Use the serialized version
-        }
+        post_id = input_data.post_id or f"generated_{int(datetime.utcnow().timestamp())}"
         
-        social_post = create_social_media_post(post_data, existing_session=existing_session)
-        if not social_post:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to save social media post to database"
+        # First check if post exists
+        social_post = session.query(SocialMediaPostDB).filter(
+            SocialMediaPostDB.post_id == post_id
+        ).first()
+        
+        if social_post:
+            # If post exists and has a token report, return None
+            if social_post.token_report_id is not None:
+                if manage_session:
+                    session.commit()
+                return None
+        else:
+            # Create new social media post
+            social_post = SocialMediaPostDB(
+                source=input_data.source,
+                post_id=post_id,
+                author_id=input_data.author_id,
+                author_username=input_data.author_username,
+                author_display_name=input_data.author_display_name,
+                text=input_data.text,
+                original_timestamp=input_data.original_timestamp or datetime.utcnow(),
+                timestamp=datetime.utcnow(),
+                reactions_count=input_data.reactions_count,
+                replies_count=input_data.replies_count,
+                reposts_count=input_data.reposts_count,
+                raw_data=raw_data
             )
+            session.add(social_post)
+            session.flush()
 
-        # Check if this is an existing post by comparing created_at with current time
-        # If the post was created more than 1 minute ago, consider it an existing post
-        if (datetime.utcnow() - social_post.created_at).total_seconds() > 15:
-            print(f"Skipping analysis - social post {social_post.id} already exists")
-            return None
-
-        # For new posts, proceed with analysis
+        # Analyze text for token mentions
         token_report = await crypto_text_classifier.ainvoke({
             'messages': [input_data.text]
         })
-
         if not token_report:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to analyze text with token finder agent"
-            )
+            raise HTTPException(status_code=500, detail="Failed to analyze text with token finder agent")
 
-        # If we have a token address, fetch additional data from DEX Screener
+        # Fetch additional DEX data if token address available
         if token_report.get('token_address'):
             dex_data = await fetch_dex_screener_data(token_report['token_address'])
             if dex_data:
                 token_report.update(dex_data)
         
-        # Save token report to database and get the saved object
-        db_token_report = create_token_report(token_report, social_post.id, existing_session=existing_session)
+        # Get or create associated token
+        token = get_or_create_token(session, token_report)
+        
+        # Create token report
+        db_token_report = create_token_report(
+            report_data=token_report,
+            post_id=social_post.id,  # Pass database ID instead of post_id string
+            existing_session=session
+        )
+        
         if not db_token_report:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to save token report to database"
-            )
-
-        # If we're managing our own session, commit the transaction
-        if not existing_session:
-            session = get_session()
-            with session.begin():
-                session.merge(social_post)
-                session.merge(db_token_report)
-                session.commit()
-
-        # Merge the database ID with the token report data
-        token_report_with_id = {**token_report, "id": db_token_report.id}
-        return token_report_with_id
-
+            raise ValueError("Failed to create token report")
+            
+        # Verify the relationship
+        session.refresh(social_post)
+        if not social_post.token_report_id:
+            raise ValueError(f"Failed to establish relationship for post {social_post.post_id}")
+        
+        if manage_session:
+            session.commit()
+            
+        return {**token_report, "id": db_token_report.id}
+        
     except Exception as e:
+        if manage_session:
+            session.rollback()
+        print(f"Error in analyze_social_post: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if manage_session:
+            session.close()
 
 @router.post(
     "/analyze_and_scout",
@@ -326,18 +340,40 @@ async def analyze_social_post(input_data: SocialMediaInput, existing_session=Non
 )
 async def analyze_and_scout(input_data: SocialMediaInput):
     """Analyze social media post and scout for token opportunities in one step."""
-    session = None
     try:
         session = get_session()
-        session.__enter__()
-        
-        # First analyze the social post
-        token_report = await analyze_social_post(input_data, existing_session=session)
-        
-        # If analyze_social_post returns None, it means this is an existing post
-        if token_report is None:
-            print("Skipping alpha scout - existing social post")
-            return None
+        try:
+            # Start transaction
+            session.begin()
+            
+            # First analyze the social post
+            token_report = await analyze_social_post(input_data, existing_session=session)
+            
+            # If analyze_social_post returns None, it means this is an existing post
+            if token_report is None:
+                print("Skipping alpha scout - existing social post")
+                session.commit()
+                return None
+            
+            # Verify the token report was created successfully and relationship is established
+            token_report_db = session.query(TokenReportDB).get(token_report['id'])
+            if not token_report_db:
+                print(f"Warning: TokenReport with ID {token_report['id']} not found after creation")
+                session.rollback()
+                return None
+            
+            # Double check the relationship
+            post_id = input_data.post_id or f"generated_{int(datetime.utcnow().timestamp())}"
+            social_post = session.query(SocialMediaPostDB).filter(
+                SocialMediaPostDB.post_id == post_id
+            ).first()
+            if not social_post or social_post.token_report_id != token_report_db.id:
+                print(f"Warning: Relationship verification failed - social_post.token_report_id = {social_post.token_report_id if social_post else None}, expected {token_report_db.id}")
+                session.rollback()
+                return None
+                
+            # Commit the transaction since everything succeeded
+            session.commit()
         
         # Only run alpha scout if:
         # 1. A purchasable token was found
