@@ -380,8 +380,8 @@ async def analyze_and_scout(input_data: SocialMediaInput):
         # 2. The token chain is Base or Solana
         # 3. The token has an address
         # 4. There aren't multiple token reports in the past hour
-        if (token_report['mentions_purchasable_token'] and
-            token_report.get('token_chain') in ['Base', 'Solana'] and
+        if (token_report['mentions_purchasable_token'] and 
+            token_report.get('token_chain') in ['Base', 'Solana'] and 
             token_report.get('token_address')):
             
             # Check for multiple token reports
