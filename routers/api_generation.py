@@ -15,13 +15,15 @@ from agents.models import TokenAlpha
 from agents.tools import IsTokenReport
 from database import (
     create_alpha_report, TokenReportDB, get_session,
-    create_social_media_post, create_token_report
+    create_social_media_post, create_token_report,
+    get_or_create_token
 )
 from db.operations.alpha import has_recent_token_report
 from db.operations.social import fetch_dex_screener_data
 from .api_models import Token, SocialMediaInput
 from schemas import SocialMediaSummary
 from db.models.token import TokenDB
+from db.models.social import SocialMediaPostDB
 
 load_dotenv()
 
@@ -374,46 +376,49 @@ async def analyze_and_scout(input_data: SocialMediaInput):
                 
             # Commit the transaction since everything succeeded
             session.commit()
-        
-        # Only run alpha scout if:
-        # 1. A purchasable token was found
-        # 2. The token chain is Base or Solana
-        # 3. The token has an address
-        # 4. There aren't multiple token reports in the past hour
-        if (token_report['mentions_purchasable_token'] and 
-            token_report.get('token_chain') in ['Base', 'Solana'] and 
-            token_report.get('token_address')):
             
-            # Check for multiple token reports
-            if has_recent_token_report(token_report['token_address']):
-                print(f"Skipping alpha scout - already ran for token {token_report['token_address']} in the past hour")
-                return None
+            # Only run alpha scout if:
+            # 1. A purchasable token was found
+            # 2. The token chain is Base or Solana
+            # 3. The token has an address
+            # 4. There aren't multiple token reports in the past hour
+            if (token_report['mentions_purchasable_token'] 
+                and token_report.get('token_chain') in ['Base', 'Solana'] 
+                and token_report.get('token_address')):
+                
+                # Check for multiple token reports
+                if has_recent_token_report(token_report['token_address']):
+                    print(f"Skipping alpha scout - already ran for token {token_report['token_address']} in the past hour")
+                    return None
+                
+                # Create IsTokenReport instance
+                token_report_model = IsTokenReport(
+                    mentions_purchasable_token=token_report['mentions_purchasable_token'],
+                    token_symbol=token_report['token_symbol'],
+                    token_chain=token_report['token_chain'],
+                    token_address=token_report['token_address'],
+                    is_listed_on_dex=token_report['is_listed_on_dex'],
+                    trading_pairs=token_report['trading_pairs'],
+                    confidence_score=token_report['confidence_score'],
+                    reasoning=token_report['reasoning']
+                )
+                
+                # Call the multi_agent_alpha_scout endpoint with token_report_id
+                token_alpha = await get_multi_agent_alpha_scout({
+                    'token_report': token_report_model.dict(),
+                    'token_report_id': token_report['id']
+                })
+                return token_alpha
             
-            # Create IsTokenReport instance
-            token_report_model = IsTokenReport(
-                mentions_purchasable_token=token_report['mentions_purchasable_token'],
-                token_symbol=token_report['token_symbol'],
-                token_chain=token_report['token_chain'],
-                token_address=token_report['token_address'],
-                is_listed_on_dex=token_report['is_listed_on_dex'],
-                trading_pairs=token_report['trading_pairs'],
-                confidence_score=token_report['confidence_score'],
-                reasoning=token_report['reasoning']
-            )
+            # If no purchasable token found, return None
+            return None
             
-            # Call the multi_agent_alpha_scout endpoint with token_report_id
-            token_alpha = await get_multi_agent_alpha_scout({
-                'token_report': token_report_model.dict(),
-                'token_report_id': token_report['id']
-            })
-            return token_alpha
-    
-        # If no purchasable token found, return None
-        return None
-        
+        except Exception as e:
+            if session:
+                session.rollback()
+            raise e
+            
     except Exception as e:
-        if session:
-            session.rollback()
         print(f"Error in analyze_and_scout: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:

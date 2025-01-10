@@ -24,6 +24,7 @@ from db import (
     get_all_alpha_reports,
     create_social_media_post,
     create_token_report,
+    get_or_create_token,
     
     # Utils
     create_db_and_tables,
@@ -47,6 +48,7 @@ __all__ = [
     'get_all_alpha_reports',
     'create_social_media_post',
     'create_token_report',
+    'get_or_create_token',
     'create_db_and_tables',
     'reset_db',
     'tables_exist'
