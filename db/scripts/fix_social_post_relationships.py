@@ -11,22 +11,21 @@ def fix_social_post_relationships():
             # Start transaction
             session.begin()
             
-            # Find posts without token_report_id that have a corresponding token report
+            # Find posts that have token reports but missing token_report_id
             results = session.execute(text("""
-                WITH orphaned_posts AS (
-                    SELECT smp.id as post_id, 
-                           smp.post_id as original_post_id,
-                           smp.token_report_id,
-                           tr.id as report_id
-                    FROM prod_social_media_posts smp
-                    LEFT JOIN prod_token_reports tr ON tr.id = smp.token_report_id
-                    WHERE smp.token_report_id IS NULL
-                )
-                SELECT p.post_id, 
-                       p.original_post_id,
+                SELECT smp.id as post_id,
+                       smp.post_id as original_post_id,
                        tr.id as report_id
-                FROM orphaned_posts p
-                JOIN prod_token_reports tr ON tr.social_media_post_id = p.post_id
+                FROM prod_social_media_posts smp
+                JOIN prod_token_reports tr ON tr.id = (
+                    SELECT tr2.id
+                    FROM prod_token_reports tr2
+                    JOIN prod_social_media_posts smp2 ON smp2.post_id = smp.post_id
+                    WHERE smp2.token_report_id = tr2.id
+                    ORDER BY tr2.created_at DESC
+                    LIMIT 1
+                )
+                WHERE smp.token_report_id IS NULL
                 ORDER BY tr.created_at DESC
             """)).fetchall()
             
@@ -40,15 +39,15 @@ def fix_social_post_relationships():
             for result in results:
                 print(f"\nFixing relationship for post {result.original_post_id}")
                 
-                # Update the relationship
+                # Update the relationship using the post's database id
                 session.execute(text("""
                     UPDATE prod_social_media_posts
                     SET token_report_id = :report_id
-                    WHERE post_id = :post_id
+                    WHERE id = :post_id
                     RETURNING id, post_id, token_report_id
                 """), {
                     'report_id': result.report_id,
-                    'post_id': result.original_post_id
+                    'post_id': result.post_id
                 })
                 
                 # Verify the update
@@ -59,9 +58,9 @@ def fix_social_post_relationships():
                            tr.id as report_id
                     FROM prod_social_media_posts smp
                     JOIN prod_token_reports tr ON tr.id = smp.token_report_id
-                    WHERE smp.post_id = :post_id
+                    WHERE smp.id = :post_id
                 """), {
-                    'post_id': result.original_post_id
+                    'post_id': result.post_id
                 }).first()
                 
                 if updated and updated.token_report_id == result.report_id:

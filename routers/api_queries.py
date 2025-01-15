@@ -271,9 +271,8 @@ async def get_tokens(
                 # Default to base and solana if no chains specified
                 query = query.filter(func.lower(TokenDB.chain).in_(['base', 'solana']))
 
-            # Create subqueries for aggregated data
-            if sort_by in ['recent_opportunity', 'market_cap']:
-                # Subquery for token opportunities
+            # Create opportunities subquery if needed for market cap filtering or sorting
+            if market_cap_max is not None or sort_by in ['recent_opportunity', 'market_cap']:
                 opp_subquery = (
                     session.query(
                         TokenOpportunityDB.token_id,
@@ -285,7 +284,17 @@ async def get_tokens(
                 )
                 query = query.outerjoin(opp_subquery, TokenDB.id == opp_subquery.c.token_id)
 
-            elif sort_by == 'kol_events':
+                # Apply market cap filter if specified
+                if market_cap_max is not None:
+                    query = query.filter(
+                        or_(
+                            opp_subquery.c.max_market_cap.is_(None),
+                            opp_subquery.c.max_market_cap <= market_cap_max
+                        )
+                    )
+
+            # Create additional subqueries for sorting if needed
+            if sort_by == 'kol_events':
                 # Subquery for KOL events
                 kol_subquery = (
                     session.query(
@@ -399,21 +408,10 @@ async def get_tokens(
                 # Only include tokens that have opportunities
                 query = query.filter(opp_subquery.c.max_created_at.isnot(None))
                 query = query.order_by(desc(opp_subquery.c.max_created_at))
-                # Apply market cap filter if specified
-                if market_cap_max is not None:
-                    query = query.filter(
-                        or_(
-                            opp_subquery.c.max_market_cap.is_(None),
-                            opp_subquery.c.max_market_cap <= market_cap_max
-                        )
-                    )
             elif sort_by == 'market_cap':
                 # Only include tokens that have market cap data
                 query = query.filter(opp_subquery.c.max_market_cap.isnot(None))
                 query = query.order_by(desc(opp_subquery.c.max_market_cap))
-                # Apply market cap filter if specified
-                if market_cap_max is not None:
-                    query = query.filter(opp_subquery.c.max_market_cap <= market_cap_max)
             elif sort_by == 'kol_events':
                 # Only include tokens that have KOL events
                 query = query.filter(kol_subquery.c.total_events > 0)
