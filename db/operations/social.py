@@ -25,6 +25,7 @@ async def fetch_dex_screener_data(token_address: str) -> Optional[Dict[str, Any]
                 
                 # Extract relevant fields
                 token_data = {
+                    'market_cap': pair.get('marketCap', None),
                     'image_url': pair.get('info', {}).get('imageUrl'),
                     'website_url': next((w['url'] for w in pair.get('info', {}).get('websites', []) 
                                       if w.get('label') == 'Website'), None),
