@@ -21,9 +21,10 @@ function createOpportunityHTML(opportunity) {
 function createSocialPostHTML(socialPost) {
     const date = new Date(socialPost.timestamp);
     const formattedDate = date.toLocaleDateString();
+    const postUrl = `https://warpcast.com/${socialPost.author_username}/${socialPost.post_id.slice(0, 10)}`;
     
     return `
-        <div class="social-post">
+        <a href="${escapeHtml(postUrl)}" target="_blank" rel="noopener noreferrer" class="social-post" style="text-decoration: none; color: inherit; display: block;">
             <img src="/static/warpcast.png" alt="Warpcast" class="warpcast-logo">
             <div class="social-post-header">
                 <span>${formattedDate}</span>
@@ -44,7 +45,7 @@ function createSocialPostHTML(socialPost) {
                     ${socialPost.reposts_count || 0}
                 </div>
             </div>
-        </div>
+        </a>
     `;
 }
 
@@ -64,7 +65,6 @@ function canRunAnalysis(lastAnalysisTime) {
 }
 
 function updateButtonState(lastAnalysisTime) {
-    const button = document.getElementById('runAlphaScout');
     const messageEl = document.getElementById('timeMessage');
     
     if (!canRunAnalysis(lastAnalysisTime)) {
@@ -75,17 +75,26 @@ function updateButtonState(lastAnalysisTime) {
         const minutesLeft = 60 - minutesElapsed;
         const adjustedMinutes = Math.max(0, Math.min(60, minutesLeft));
         
-        console.log('Button disabled - minutes remaining:', adjustedMinutes);
-        button.disabled = true;
-        messageEl.textContent = `Available in ${adjustedMinutes} minute${adjustedMinutes !== 1 ? 's' : ''}`;
+        console.log('Analysis not available - minutes remaining:', adjustedMinutes);
+        messageEl.textContent = `Next analysis available in ${adjustedMinutes} minute${adjustedMinutes !== 1 ? 's' : ''}`;
     } else {
-        console.log('Button enabled - analysis can be run');
-        button.disabled = false;
+        console.log('Analysis available');
         messageEl.textContent = '';
     }
 }
 
 async function loadTokenData() {
+    // Add pulse animation style
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+
     const urlParams = new URLSearchParams(window.location.search);
     const urlTokenAddress = urlParams.get('address');
     const tokenGrid = document.querySelector('.token-grid');
@@ -178,12 +187,7 @@ async function loadTokenData() {
             <div style="padding: 0 20px; margin-bottom: 30px;">
                 <div style="display: flex; flex-direction: column; gap: 15px; align-items: center;">
                     <h2 class="section-header" style="margin: 0;">Token Analysis</h2>
-                    <div class="button-container">
-                        <button id="runAlphaScout" class="action-button">
-                            🚀 🔬 Run Alpha Analysis
-                        </button>
-                        <div id="timeMessage"></div>
-                    </div>
+                    <div id="timeMessage" style="text-align: center;"></div>
                 </div>
             </div>
             ${opportunities.length > 0 
@@ -241,18 +245,19 @@ async function loadTokenData() {
             displayHistoricalOpportunities(1);
         }
 
-        // Set up alpha scout button handler
+        // Set up automatic alpha analysis
         const lastAnalysisTime = opportunities.length > 0 ? opportunities[0].created_at : null;
-        updateButtonState(lastAnalysisTime);
-
-        // Update time message every minute
-        setInterval(() => updateButtonState(lastAnalysisTime), 60000);
-
-        document.getElementById('runAlphaScout').addEventListener('click', async function() {
+        
+        async function runAnalysis() {
             try {
-                this.disabled = true;
-                this.textContent = '🚀 🔬 Running Analysis...';
-                this.style.animation = 'pulse 1.5s infinite';
+                const messageEl = document.getElementById('timeMessage');
+                if (!canRunAnalysis(lastAnalysisTime)) {
+                    updateButtonState(lastAnalysisTime);
+                    return;
+                }
+                
+                messageEl.textContent = '🚀 🔬 Running Analysis...';
+                messageEl.style.animation = 'pulse 2s infinite';
                 
                 if (!token.latest_report || !token.latest_report.id) {
                     throw new Error('Cannot run analysis: No valid token report available. Please ensure there is a complete token report with all required fields.');
@@ -304,15 +309,25 @@ async function loadTokenData() {
                     throw new Error(`Alpha scout analysis failed: ${error.message}`);
                 }
             } catch (error) {
-                console.error('Error running alpha scout:', error);
-                alert('Failed to run alpha analysis: ' + error.message);
-                this.disabled = false;
-                this.textContent = '🚀 🔬 Run Alpha Analysis';
-                this.style.animation = 'none';
+                // Only log the error and update message if it's not due to page navigation
+                if (error.message !== 'Alpha scout analysis failed: Failed to fetch') {
+                    console.error('Error running alpha scout:', error);
+                    messageEl.textContent = 'Analysis failed: ' + error.message;
+                    messageEl.style.animation = 'none';
+                }
             }
-        });
+        }
 
-                // Set up social posts with infinite scrolling
+        // Run analysis on page load and update time message every minute
+        runAnalysis();
+        setInterval(() => {
+            const messageEl = document.getElementById('timeMessage');
+            if (!messageEl.textContent.includes('Running Analysis')) {
+                updateButtonState(lastAnalysisTime);
+            }
+        }, 60000);
+
+        // Set up social posts with infinite scrolling
         const socialPosts = token.token_reports
             .filter(report => report.social_media_post)
             .map(report => report.social_media_post);
